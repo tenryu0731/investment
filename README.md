@@ -33,6 +33,39 @@ python -m invest status                                 # キャッシュの状�
 - API の生レスポンスは `raw_responses` に gzip で保存する。
 - レート制限: J-Quants 13 秒間隔、日銀 2 秒間隔 (前回時刻を DB に保存し、連続実行でも守る)。
 
+## 構成
+
+```
+invest/
+  __main__.py        CLI (登録済みのデータ源から自動で組み立てる)
+  db.py              共通テーブル (coverage / fetch_log / raw_responses / rate_state)
+  http.py            HTTP GET (レート制限・リトライ)
+  periods.py         期間文字列の計算 (日 / 月 / 四半期 / 半期 / 年)
+  sources/
+    base.py          データ源の基底クラス Source
+    _template.py     新しいデータ源のひな形 (読み込まれない)
+    jquants.py       J-Quants
+    boj.py           日本銀行
+```
+
+## 新しいデータ源の追加
+
+`invest/sources/` に 1 ファイル置くだけで、CLI・テーブル作成・`status` に反映される。他のファイルは触らない。
+
+1. `invest/sources/_template.py` を `invest/sources/<名前>.py` にコピーする。
+2. `TODO` を埋める。設定するのは次のとおり。
+    - `name`（DB 内の識別子）、`cli`（サブコマンド名）、`base_url`
+    - `schema`（テーブルは `<cli>_` で始める）、`tables`
+    - `env_vars`（必要な API キー）、`min_interval`（利用規約に合わせたアクセス間隔）
+    - `headers()`（認証）、`commands()`（CLI コマンド）
+3. 取得処理は、基底クラスの次のどちらかで書く。どちらでも再取得しない判定は自動で入る。
+    - 一覧・マスタ・書類など一括で取るもの: `self.once(conn, resource, refresh, fetch)`
+    - 時系列: `self.timeseries(conn, series, unit, start, end, fetch=..., final_until=...)`
+4. HTTP は必ず `self.get` / `self.get_json` を使う。レート制限、リトライ、生レスポンス保存が入る。
+5. `python -m invest <cli> --help` と `python -m unittest discover -s tests` で確認する。
+
+`final_until` は「この期間までは値が変わらない」最後の期間を返す関数。これより後の期間は取得済みとして記録しないので、次回また取りに行く（`tail_end` を渡すと 12 時間に 1 回に抑える）。
+
 ## 環境変数
 
 | 変数 | 用途 |

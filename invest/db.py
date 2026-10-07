@@ -1,5 +1,8 @@
 """SQLite キャッシュ。
 
+共通テーブルだけをここで定義する。データ源固有のテーブルは各 sources/<名前>.py の
+schema に書く。
+
 再取得を避ける仕組みは 2 種類:
     coverage  : 時系列データの「取得済み・確定済み」区間。未取得の区間だけ API を呼ぶ。
     fetch_log : 一括で取る資源 (銘柄一覧・メタデータ・財務) の取得記録。
@@ -46,71 +49,6 @@ CREATE TABLE IF NOT EXISTS rate_state (
     source      TEXT PRIMARY KEY,
     last_at     REAL NOT NULL
 );
-
--- J-Quants
-CREATE TABLE IF NOT EXISTS jq_master (
-    code        TEXT PRIMARY KEY,
-    date        TEXT,
-    name        TEXT,
-    name_en     TEXT,
-    s17         TEXT,
-    s17_name    TEXT,
-    s33         TEXT,
-    s33_name    TEXT,
-    scale       TEXT,
-    market      TEXT,
-    market_name TEXT,
-    data        TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS jq_bars (
-    code        TEXT NOT NULL,
-    date        TEXT NOT NULL,
-    o REAL, h REAL, l REAL, c REAL, vo REAL, va REAL,
-    adj_factor REAL,
-    adj_o REAL, adj_h REAL, adj_l REAL, adj_c REAL, adj_vo REAL,
-    data        TEXT NOT NULL,
-    PRIMARY KEY (code, date)
-);
-
-CREATE TABLE IF NOT EXISTS jq_fins (
-    disc_no     TEXT PRIMARY KEY,
-    code        TEXT NOT NULL,
-    disc_date   TEXT,
-    doc_type    TEXT,
-    per_type    TEXT,
-    per_start   TEXT,
-    per_end     TEXT,
-    fy_end      TEXT,
-    sales REAL, op REAL, odp REAL, np REAL, eps REAL,
-    ta REAL, eq REAL, bps REAL, cfo REAL, roe REAL,
-    data        TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS jq_fins_code ON jq_fins (code, disc_date);
-
--- 日銀
-CREATE TABLE IF NOT EXISTS boj_meta (
-    db          TEXT NOT NULL,
-    code        TEXT NOT NULL,
-    name        TEXT,
-    unit        TEXT,
-    frequency   TEXT,
-    category    TEXT,
-    start_period TEXT,
-    end_period  TEXT,
-    last_update TEXT,
-    notes       TEXT,
-    PRIMARY KEY (db, code)
-);
-
-CREATE TABLE IF NOT EXISTS boj_obs (
-    db          TEXT NOT NULL,
-    code        TEXT NOT NULL,
-    date        TEXT NOT NULL,
-    period      TEXT NOT NULL,
-    value       REAL NOT NULL,
-    PRIMARY KEY (db, code, date)
-);
 """
 
 
@@ -118,12 +56,18 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def connect(path: Path | None = None) -> sqlite3.Connection:
+def connect(path: Path | None = None, schemas: list[str] = ()) -> sqlite3.Connection:
+    """DB を開き、共通スキーマと各データ源のスキーマ (schemas) を作成する。
+
+    通常は invest.sources.connect() 経由で呼ぶ (登録済みの全データ源のスキーマが入る)。
+    """
     p = Path(path or config.DB_PATH)
     p.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(p)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    for schema in schemas:
+        conn.executescript(schema)
     return conn
 
 
