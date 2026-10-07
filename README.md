@@ -16,6 +16,7 @@ python -m invest boj series FM08 FXERD01 --start 202401 # 日銀: ドル円 (9�
 python -m invest jq master                              # J-Quants: 上場銘柄一覧
 python -m invest jq bars 7203 --start 2026-01-01        # J-Quants: 日足
 python -m invest jq fins 7203                           # J-Quants: 財務情報
+python -m invest edinet docs 2026-10-06                  # EDINET: 書類一覧 (提出日指定)
 python -m invest status                                 # キャッシュの状態
 ```
 
@@ -46,6 +47,7 @@ invest/
     _template.py     新しいデータ源のひな形 (読み込まれない)
     jquants.py       J-Quants
     boj.py           日本銀行
+    edinet.py        EDINET (書類一覧)
 ```
 
 ## 新しいデータ源の追加
