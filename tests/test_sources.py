@@ -75,5 +75,21 @@ class BaseTest(unittest.TestCase):
         self.assertEqual(self.src.requested[-1], ("2025-12-01", "2025-12-31"))
 
 
+class EdinetTest(unittest.TestCase):
+    def test_docs_end_is_clamped_to_today_and_not_refetched(self):
+        from invest.sources import edinet
+        src = edinet.Edinet()
+        days = []
+        src._list = lambda conn, day: days.append(day) or {"results": []}
+        with tempfile.TemporaryDirectory() as d:
+            conn = db.connect(Path(d) / "t.sqlite", [edinet.SCHEMA])
+            today = edinet._today_jst()
+            src.fetch_docs(conn, today, "2999-12-31")
+            self.assertEqual(days, [today])
+            src.fetch_docs(conn, today, "2999-12-31")  # TTL 内なので呼ばない
+            self.assertEqual(days, [today])
+            self.assertEqual(src.fetch_docs(conn, "2999-01-01", "2999-01-02")["calls"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

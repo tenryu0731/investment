@@ -71,7 +71,7 @@ invest/
 | 変数 | 用途 |
 |---|---|
 | `JQUANTS_API_KEY` | J-Quants API キー |
-| `EDINET_API_KEY` | EDINET API キー (取得処理 `sources/edinet.py` は未作成) |
+| `EDINET_API_KEY` | EDINET API キー (`sources/edinet.py`: 書類一覧) |
 | `INVEST_DB` | DB の場所 (既定 `data/invest.sqlite`) |
 
 日銀 API は認証不要。

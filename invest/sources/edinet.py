@@ -51,7 +51,7 @@ class Edinet(Source):
 
     def commands(self):
         return [
-            Command("ping", "疎通確認 (1 日分の件数だけ確認。保存しない)",
+            Command("ping", "疎通確認 (1 日分の件数だけ確認。書類は保存しないが、生の応答は取得ログに残る)",
                     lambda c, a: self.ping(c, a.date),
                     [arg("--date", default=None, help="YYYY-MM-DD (既定: 昨日)")]),
             Command("docs", "書類一覧を日付指定で取得して保存",
@@ -73,6 +73,11 @@ class Edinet(Source):
         return {"date": day, "ok": True, "count": d["metadata"]["resultset"]["count"]}
 
     def fetch_docs(self, conn, start: str, end: str, refresh: bool = False) -> dict:
+        # 未来の日付は取得できず、取得済みにも記録できないため、終了日を今日までに制限する。
+        end = min(end, _today_jst())
+        if start > end:
+            return {"series": "docs", "calls": 0, "stored": 0}
+
         def fetch(gap_start: str, gap_end: str) -> int:
             n = 0
             for o in range(periods.to_ord("D", gap_start), periods.to_ord("D", gap_end) + 1):
