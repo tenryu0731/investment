@@ -93,3 +93,13 @@ class EdinetTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class YahooTest(unittest.TestCase):
+    def test_split_factor(self):
+        from invest.sources.yahoo import _split_factor
+        self.assertEqual(_split_factor(2910.5, 2902.0), 1)       # 大引けの板寄せとの差
+        self.assertEqual(_split_factor(7627.0, 508.1), 15)        # 1:15 分割前の日
+        self.assertEqual(_split_factor(55210.0, 11040.0), 5)
+        self.assertEqual(_split_factor(100.0, 1000.0), 0.1)       # 併合
+        self.assertEqual(_split_factor(100.0, None), 1)

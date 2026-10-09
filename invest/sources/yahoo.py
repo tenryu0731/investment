@@ -64,6 +64,16 @@ def _last_final_day(now: datetime | None = None) -> str:
     return d.isoformat()
 
 
+def _split_factor(intraday_close: float, daily_close: float | None) -> float:
+    """日中足の終値と日足の終値の比から分割比率を推定する (ずれていなければ 1)。"""
+    if not daily_close:
+        return 1
+    r = intraday_close / daily_close
+    if 0.9 < r < 1.1:
+        return 1
+    return round(r) if r > 1 else 1 / round(1 / r)
+
+
 def parse_chart(data: dict, period1: int, period2: int) -> tuple[dict, list[tuple]]:
     """chart API のレスポンスを (meta, [(ts, date, time, o, h, l, c, v)]) にする。
 
@@ -165,6 +175,11 @@ class Yahoo(Source):
         prev_dates = sorted(daily)
         prev_bar_close = None
         for d, bars in days.items():
+            # 日足は株式分割を遡って調整済み、日中足は未調整。ずれていれば日中足を日足に合わせる。
+            k = _split_factor(bars[-1][4], daily[d]["c"] if d in daily else None)
+            if k != 1:
+                bars = [[t, round(o / k, 1), round(h / k, 1), round(l / k, 1), round(c / k, 1), round(v * k)]
+                        for t, o, h, l, c, v in bars]
             earlier = [x for x in prev_dates if x < d]
             prev_close = daily[earlier[-1]]["c"] if earlier else prev_bar_close
             day = daily.get(d)

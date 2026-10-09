@@ -304,6 +304,9 @@ button, summary, select { touch-action: manipulation; }
           <label for="s-days">ランダムで出す日
             <select id="s-days"><option value="1m" selected>1分足の日だけ</option><option value="all">5分足の日も含む</option></select>
           </label>
+          <label for="s-vol">値動きの激しさ
+            <select id="s-vol"><option value="all" selected>すべて</option></select>
+          </label>
         </div>
         <div class="note">資産 = 初期資金 + これまでの累計損益。建玉の上限は、その日の始めの資産の 3.3 倍 (信用取引の目安)。自動損切り・利確は建玉の平均単価から設定し、0 で無効。</div>
         <div class="row">
@@ -476,7 +479,7 @@ function fillPicker() {
     const s = DATA.sessions[i];
     if (s.code !== code) { group = document.createElement("optgroup"); group.label = `${s.code} ${nameOf(s)}`; sel.appendChild(group); code = s.code; }
     const o = document.createElement("option");
-    o.value = i; o.textContent = `${s.date}${s.interval === "5m" ? " (5分足)" : ""}${done.has(sessionKey(s)) ? " ✓" : ""}`;
+    o.value = i; o.textContent = `${s.date}${s.interval === "5m" ? " (5分足)" : ""} ${volLabel(s)} ${dayRange(s).toFixed(1)}%${done.has(sessionKey(s)) ? " ✓" : ""}`;
     group.appendChild(o);
   }
 }
@@ -484,9 +487,46 @@ function fillPicker() {
 // まだ遊んでいない日から選ぶ。全部遊んだら全体から。
 // 「1分足の日だけ」なら 5 分足の日を除く (選択欄から直接選ぶのは自由)
 function randomPool() {
-  const list = playable();
-  return $("s-days").value === "all" ? list : list.filter((i) => DATA.sessions[i].interval !== "5m");
+  const list = playable(), v = $("s-vol").value;
+  return list.filter((i) => {
+    const s = DATA.sessions[i];
+    return ($("s-days").value === "all" || s.interval !== "5m") && (v === "all" || volLevel(s) === v);
+  });
 }
+
+// ---- 値動きの激しさ -------------------------------------------------------------
+// 1 日の値幅 (高値-安値) を前日終値で割った % で測り、全データの分位で 4 段階に分ける。
+const VOL_LEVELS = [
+  { id: "calm", label: "穏やか" },
+  { id: "normal", label: "普通" },
+  { id: "wild", label: "激しい" },
+  { id: "extreme", label: "超激しい" },
+];
+let VOL_CUTS = [Infinity, Infinity, Infinity];
+function dayRange(s) {
+  if (s._range != null) return s._range;
+  let h = -Infinity, l = Infinity;
+  for (const b of s.bars) { h = Math.max(h, b[2]); l = Math.min(l, b[3]); }
+  if (s.open != null) { h = Math.max(h, s.open); l = Math.min(l, s.open); }
+  const base = s.prev_close || s.bars[0][1];
+  return (s._range = (h - l) / base * 100);
+}
+function volLevel(s) {
+  const r = dayRange(s);
+  return r < VOL_CUTS[0] ? "calm" : r < VOL_CUTS[1] ? "normal" : r < VOL_CUTS[2] ? "wild" : "extreme";
+}
+function setupVol() {
+  const rs = playable().map((i) => dayRange(DATA.sessions[i])).sort((a, b) => a - b);
+  const q = (p) => rs[Math.min(rs.length - 1, Math.floor(p * rs.length))];
+  VOL_CUTS = [q(1 / 3), q(2 / 3), q(0.9)];
+  const f = (x) => x.toFixed(1);
+  const ranges = [`〜${f(VOL_CUTS[0])}%`, `${f(VOL_CUTS[0])}〜${f(VOL_CUTS[1])}%`, `${f(VOL_CUTS[1])}〜${f(VOL_CUTS[2])}%`, `${f(VOL_CUTS[2])}%〜`];
+  const sel = $("s-vol"), keep = storage("dt-vol") || "all";
+  sel.innerHTML = '<option value="all">すべて</option>' +
+    VOL_LEVELS.map((v, k) => `<option value="${v.id}">${v.label} (値幅 ${ranges[k]})</option>`).join("");
+  sel.value = [...sel.options].some((o) => o.value === keep) ? keep : "all";
+}
+const volLabel = (s) => VOL_LEVELS.find((v) => v.id === volLevel(s)).label;
 function randomSession() {
   const list = randomPool(), done = played();
   const fresh = list.filter((i) => !done.has(sessionKey(DATA.sessions[i])));
@@ -748,6 +788,7 @@ function showResult(before) {
   const after = ACC.start + ACC.realized;
   const rows = [
     ["資産", `${fmt(before)} → ${fmt(after)} 円`],
+    ["この日の値動き", `${volLabel(S)} (値幅 ${dayRange(S).toFixed(1)}%)`],
     ["資産比", G.cap > 0 ? ((pnl / G.cap) * 100).toFixed(2) + "%" : "—"],
     ["累計損益", `${signed(ACC.realized)} 円 (${ACC.days} 日)`],
     ["決済回数", st.n],
@@ -1318,6 +1359,13 @@ function bind() {
     // 5 分足の日を遊んでいて、まだ売買していなければ 1 分足の日に替える
     if ($("s-days").value === "1m" && S && S.interval === "5m" && G && !G.fills.length) startSession(null);
   };
+  $("s-vol").onchange = () => {
+    storage("dt-vol", $("s-vol").value);
+    if (!DATA) return;
+    fillPicker();
+    // まだ売買していなければ、選んだ激しさの日に替える
+    if (G && !G.fills.length && $("s-vol").value !== "all" && volLevel(S) !== $("s-vol").value) startSession(null);
+  };
   $("s-cap").onchange = () => {
     ACC.start = Math.max(100000, Math.round(+$("s-cap").value || 3000000)); $("s-cap").value = ACC.start;
     saveAccount(); if (G) render();
@@ -1375,12 +1423,12 @@ async function boot() {
     $("loader").hidden = false; $("game").hidden = true;
     $("file").onchange = async (e) => {
       const f = e.target.files[0]; if (!f) return;
-      try { DATA = await loadData(JSON.parse(await f.text())); $("loader").hidden = true; $("game").hidden = false; fillPicker(); startSession(null); }
+      try { DATA = await loadData(JSON.parse(await f.text())); $("loader").hidden = true; $("game").hidden = false; setupVol(); fillPicker(); startSession(null); }
       catch (err) { $("msg").textContent = "JSON を読めませんでした。export で作ったファイルを選んでください。"; }
     };
     return;
   }
-  fillPicker(); startSession(null);
+  setupVol(); fillPicker(); startSession(null);
 }
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => G && drawChart());
 boot();
