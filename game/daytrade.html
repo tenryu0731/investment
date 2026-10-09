@@ -18,6 +18,7 @@
   --grid: #e3e8ee;
   --btn: #e6eaef;
   --on-trade: #ffffff;    /* 売買ボタンの文字 */
+  --i1: #0f8a7e; --i2: #8a3fb8; --i3: #6b7a00; --i4: #d0368a; --i5: #8a5a2b; --bb: #5f7896;  /* 指標の線 */
   --font-display: "Dela Gothic One", "Hiragino Kaku Gothic StdN", sans-serif;
   --font-body: "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
   --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -26,13 +27,15 @@
   :root:not([data-theme="light"]) {
     --bg: #0e141b; --panel: #151d27; --line: #283444; --fg: #e4e9ef; --muted: #93a0b0;
     --accent: #f0b43c; --up: #ff6b5e; --down: #5ea0ff; --gain: #ff6b5e; --loss: #5ea0ff;
-    --grid: #1d2733; --btn: #222d3a; --on-trade: #0e141b; color-scheme: dark;
+    --grid: #1d2733; --btn: #222d3a; --on-trade: #0e141b;
+    --i1: #2dd4bf; --i2: #c084fc; --i3: #b5c934; --i4: #f472b6; --i5: #d6a56f; --bb: #8ea3c2; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e141b; --panel: #151d27; --line: #283444; --fg: #e4e9ef; --muted: #93a0b0;
   --accent: #f0b43c; --up: #ff6b5e; --down: #5ea0ff; --gain: #ff6b5e; --loss: #5ea0ff;
-  --grid: #1d2733; --btn: #222d3a; --on-trade: #0e141b; color-scheme: dark;
+  --grid: #1d2733; --btn: #222d3a; --on-trade: #0e141b;
+    --i1: #2dd4bf; --i2: #c084fc; --i3: #b5c934; --i4: #f472b6; --i5: #d6a56f; --bb: #8ea3c2; color-scheme: dark;
 }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
@@ -49,10 +52,26 @@ h1 { font-family: var(--font-display); font-weight: 400; font-size: 22px; margin
 @media (max-width: 860px) { .main { grid-template-columns: minmax(0, 1fr); } }
 .left { display: grid; gap: 12px; align-content: start; min-width: 0; }
 .chartbox { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; position: relative; min-width: 0; }
-canvas#chart { display: block; width: 100%; height: 480px; touch-action: none; }
-@media (max-width: 600px) { canvas#chart { height: 360px; } }
-.hover { position: absolute; left: 8px; top: 6px; font-family: var(--font-num); font-size: 12px; color: var(--muted); pointer-events: none; white-space: nowrap; }
-.legend { position: absolute; right: 64px; top: 6px; font-size: 11px; color: var(--muted); display: flex; gap: 10px; pointer-events: none; }
+canvas#chart { display: block; width: 100%; height: 480px; touch-action: pan-y; cursor: crosshair; }
+.charttools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.charttools select { width: auto; }
+.zoom { display: flex; }
+.zoom button { border-radius: 0; margin-left: -1px; min-width: 40px; }
+.zoom button:first-child { border-radius: 4px 0 0 4px; margin-left: 0; }
+.zoom button:last-child { border-radius: 0 4px 4px 0; }
+.zinfo { font-size: 12px; color: var(--muted); font-family: var(--font-num); }
+#ind { position: relative; }
+#ind summary { list-style: none; background: var(--btn); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; cursor: pointer; color: var(--fg); font-size: 14px; }
+#ind summary::-webkit-details-marker { display: none; }
+#ind[open] summary { border-color: var(--muted); }
+.indgrid { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; width: min(340px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, .18); }
+.indgrid fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.indgrid legend { font-size: 11px; color: var(--muted); letter-spacing: .08em; padding: 0 0 4px; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg); cursor: pointer; }
+.chk i { display: inline-block; width: 12px; height: 3px; border-radius: 1px; }
+.chead { display: grid; gap: 2px; padding: 6px 8px 0; min-width: 0; }
+.hover { font-family: var(--font-num); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.4em; }
+.legend { flex-wrap: wrap; min-height: 1.4em; font-size: 11px; color: var(--muted); display: flex; gap: 10px; pointer-events: none; }
 .legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 4px; }
 .side { display: grid; gap: 12px; align-content: start; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px; display: grid; gap: 10px; }
@@ -120,11 +139,33 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 
   <div class="main" id="game">
     <div class="left">
-    <div class="chartbox">
-      <canvas id="chart"></canvas>
-      <div class="hover" id="hover"></div>
-      <div class="legend"><span><i style="background:var(--accent)"></i>VWAP</span><span><i style="background:var(--muted)"></i>前日終値</span></div>
+    <div class="charttools">
+      <select id="tf" aria-label="足種">
+        <option value="1">1 分足</option>
+        <option value="3">3 分足</option>
+        <option value="5">5 分足</option>
+        <option value="15">15 分足</option>
+      </select>
+      <div class="zoom" role="group" aria-label="拡大・縮小">
+        <button id="z-out" title="縮小 (−キー)">−</button>
+        <button id="z-in" title="拡大 (+キー)">＋</button>
+        <button id="z-fit" title="全体を表示 (0キー)">全体</button>
+        <button id="z-live" title="最新の足へ (Endキー)">最新へ</button>
+      </div>
+      <details id="ind">
+        <summary>インジケーター</summary>
+        <div class="indgrid" id="ind-grid"></div>
+      </details>
+      <span class="zinfo" id="z-info"></span>
     </div>
+    <div class="chartbox">
+      <div class="chead">
+        <div class="hover" id="hover"></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <canvas id="chart"></canvas>
+    </div>
+    <div class="note">ホイール・ピンチで拡大縮小、ドラッグで過去へスクロール、ダブルクリックで全体表示。</div>
     <div class="controls" id="controls">
       <button id="b-step">次の足<kbd>→</kbd></button>
       <button id="b-step5">5 本</button>
@@ -257,7 +298,6 @@ let S = null;        // 現在のセッション
 let prevS = null;    // 同じ銘柄の前営業日
 let G = null;        // ゲーム状態
 let timer = null;
-let viewBars = 140;  // 表示本数
 let hoverIdx = null;
 
 function nameOf(s) { return JP_NAMES[s.code] || s.name || s.code; }
@@ -311,6 +351,7 @@ function startSession(i) {
     fills: [], marks: [], equity: [0], closedTrades: [], done: false, sessionIndex: i,
   };
   $("qty").value = Math.max(100, Math.floor(cap / first / 100) * 100);
+  CH.offset = 0; hoverIdx = null;
   $("stop").value = ""; $("tp").value = "";
   $("msg").textContent = "寄り前。成行注文は寄り値で約定します。";
   updateHeader(); render();
@@ -538,139 +579,447 @@ function renderFills() {
   ).join("");
 }
 
+// ---- チャート設定 -----------------------------------------------------------
+const IND = [
+  { id: "vwap", label: "VWAP", color: "--accent", group: "line" },
+  { id: "sma5", label: "SMA 5", color: "--i1", group: "line" },
+  { id: "sma25", label: "SMA 25", color: "--i2", group: "line" },
+  { id: "sma75", label: "SMA 75", color: "--i3", group: "line" },
+  { id: "ema9", label: "EMA 9", color: "--i4", group: "line" },
+  { id: "ema20", label: "EMA 20", color: "--i5", group: "line" },
+  { id: "bb", label: "ボリンジャー 20 ±2σ", color: "--bb", group: "line" },
+  { id: "prevhl", label: "前日高値・安値", color: "--muted", group: "line" },
+  { id: "vol", label: "出来高", group: "pane" },
+  { id: "rsi", label: "RSI 14", group: "pane" },
+  { id: "macd", label: "MACD 12・26・9", group: "pane" },
+  { id: "stoch", label: "ストキャス 14・3・3", group: "pane" },
+];
+const CH = { tf: 1, on: new Set(["vwap", "sma5", "sma25", "vol"]), view: 120, offset: 0 };
+(() => {
+  const s = storage("dt-chart");
+  if (s) { CH.tf = s.tf || 1; if (Array.isArray(s.on)) CH.on = new Set(s.on); CH.view = s.view || 120; }
+})();
+const saveChart = () => storage("dt-chart", { tf: CH.tf, on: [...CH.on], view: CH.view });
+let hoverY = null;
+
+// ---- 足の集約と指標 -----------------------------------------------------------
+const mins = (t) => +t.slice(0, 2) * 60 + +t.slice(3, 5);
+const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+function aggregate(bars, tf, prev) {
+  const out = [];
+  let cur = null, key = null;
+  bars.forEach((b, i) => {
+    const k = Math.floor(mins(b[0]) / tf);
+    if (k !== key) {
+      cur = { t: hhmm(k * tf), o: b[1], h: b[2], l: b[3], c: b[4], v: b[5], prev, first: i, last: i };
+      out.push(cur); key = k;
+    } else {
+      cur.h = Math.max(cur.h, b[2]); cur.l = Math.min(cur.l, b[3]); cur.c = b[4]; cur.v += b[5]; cur.last = i;
+    }
+  });
+  return out;
+}
+
+function sma(a, n) {
+  const out = new Array(a.length).fill(null);
+  let sum = 0, cnt = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] == null) { sum = 0; cnt = 0; continue; }
+    sum += a[i]; cnt++;
+    if (cnt > n) { sum -= a[i - n]; cnt = n; }
+    if (cnt === n) out[i] = sum / n;
+  }
+  return out;
+}
+function ema(a, n) {
+  const out = new Array(a.length).fill(null), k = 2 / (n + 1);
+  let e = null, cnt = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] == null) continue;
+    e = e == null ? a[i] : a[i] * k + e * (1 - k); cnt++;
+    if (cnt >= n) out[i] = e;
+  }
+  return out;
+}
+function bollinger(a, n, m) {
+  const mid = sma(a, n), up = [], dn = [];
+  for (let i = 0; i < a.length; i++) {
+    if (mid[i] == null) { up.push(null); dn.push(null); continue; }
+    let v = 0; for (let j = i - n + 1; j <= i; j++) v += (a[j] - mid[i]) ** 2;
+    const sd = Math.sqrt(v / n); up.push(mid[i] + m * sd); dn.push(mid[i] - m * sd);
+  }
+  return { mid, up, dn };
+}
+function rsi(a, n) {
+  const out = new Array(a.length).fill(null);
+  let ag = 0, al = 0;
+  for (let i = 1; i < a.length; i++) {
+    const d = a[i] - a[i - 1], g = Math.max(d, 0), l = Math.max(-d, 0);
+    if (i <= n) { ag += g / n; al += l / n; if (i < n) continue; }
+    else { ag = (ag * (n - 1) + g) / n; al = (al * (n - 1) + l) / n; }
+    out[i] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+  }
+  return out;
+}
+function macd(a) {
+  const f = ema(a, 12), s = ema(a, 26);
+  const line = a.map((_, i) => (f[i] == null || s[i] == null ? null : f[i] - s[i]));
+  const sig = ema(line, 9);
+  return { line, sig, hist: line.map((v, i) => (v == null || sig[i] == null ? null : v - sig[i])) };
+}
+function stoch(bars, n, ks, ds) {
+  const raw = bars.map((_, i) => {
+    if (i < n - 1) return null;
+    let hh = -Infinity, ll = Infinity;
+    for (let j = i - n + 1; j <= i; j++) { hh = Math.max(hh, bars[j].h); ll = Math.min(ll, bars[j].l); }
+    return hh === ll ? 50 : (bars[i].c - ll) / (hh - ll) * 100;
+  });
+  const k = sma(raw, ks);
+  return { k, d: sma(k, ds) };
+}
+
+// 公開済みの足 (前日 + 当日) を足種で集約し、選ばれた指標を計算する。
+function series() {
+  const prevAgg = prevS ? aggregate(prevS.bars, CH.tf, true) : [];
+  const today = aggregate(S.bars.slice(0, G.idx), CH.tf, false);
+  const bars = prevAgg.concat(today), cl = bars.map((b) => b.c), on = (id) => CH.on.has(id);
+  const ind = {};
+  if (on("sma5")) ind.sma5 = sma(cl, 5);
+  if (on("sma25")) ind.sma25 = sma(cl, 25);
+  if (on("sma75")) ind.sma75 = sma(cl, 75);
+  if (on("ema9")) ind.ema9 = ema(cl, 9);
+  if (on("ema20")) ind.ema20 = ema(cl, 20);
+  if (on("bb")) ind.bb = bollinger(cl, 20, 2);
+  if (on("rsi")) ind.rsi = rsi(cl, 14);
+  if (on("macd")) ind.macd = macd(cl);
+  if (on("stoch")) ind.stoch = stoch(bars, 14, 3, 3);
+  if (on("vwap")) {
+    const vw = [];
+    for (let i = 0, pv = 0, vv = 0; i < G.idx; i++) {
+      const b = S.bars[i], tp = (b[2] + b[3] + b[4]) / 3;
+      pv += tp * b[5]; vv += b[5]; vw.push(vv > 0 ? pv / vv : tp);
+    }
+    ind.vwap = bars.map((b) => (b.prev ? null : vw[b.last]));
+  }
+  return { bars, ind, prevLen: prevAgg.length, today };
+}
+
+// ---- 描画 -----------------------------------------------------------------
 function drawChart() {
   const cv = $("chart"), dpr = window.devicePixelRatio || 1;
-  const W = cv.clientWidth, H = cv.clientHeight;
+  const panes = ["vol", "rsi", "macd", "stoch"].filter((p) => CH.on.has(p));
+  const phone = window.innerWidth < 600;
+  const mainH = phone ? 300 : 400, paneH = phone ? 64 : 84;
+  const cssH = mainH + panes.length * paneH + 22;
+  if (cv.style.height !== cssH + "px") cv.style.height = cssH + "px";
+  const W = cv.clientWidth, H = cssH;
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   const c = cv.getContext("2d");
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, W, H);
-  const col = { fg: css("--fg"), muted: css("--muted"), grid: css("--grid"), up: css("--up"), down: css("--down"), accent: css("--accent"), line: css("--line") };
+  const col = { fg: css("--fg"), muted: css("--muted"), grid: css("--grid"), up: css("--up"), down: css("--down"),
+    accent: css("--accent"), line: css("--line"), panel: css("--panel") };
+  const fontNum = `11px ${css("--font-num")}`, fontBody = `11px ${css("--font-body")}`;
 
-  // 表示する足: 前日 (薄く) + 当日の公開済み分
-  const prevBars = prevS ? prevS.bars : [];
-  const all = prevBars.map((b) => ({ b, prev: true })).concat(S.bars.slice(0, G.idx).map((b, i) => ({ b, prev: false, i })));
-  const n = Math.min(viewBars, Math.max(all.length, 1));
-  const vis = all.slice(Math.max(0, all.length - n));
-  const padR = 64, padB = 22, padT = 24, volH = Math.round((H - padB - padT) * 0.18);
-  const plotW = W - padR - 8, priceH = H - padB - padT - volH - 6;
-  const slots = Math.max(n + 8, 40), bw = plotW / slots;
-  const x = (k) => 8 + k * bw + bw / 2;
+  const { bars, ind, prevLen, today } = series();
+  const total = bars.length;
+  const n = Math.max(10, Math.round(CH.view));
+  CH.offset = Math.max(0, Math.min(CH.offset, total - Math.min(n, total)));
+  const end = total - Math.round(CH.offset), start = Math.max(0, end - n);
+  const vis = bars.slice(start, end);
+  const padR = 64, padT = 22, padB = 22, L = 8;
+  const plotW = W - padR - L;
+  const slots = n + (CH.offset < 1 ? 6 : 0), bw = plotW / slots;
+  const x = (j) => L + j * bw + bw / 2;
+  const mainBottom = padT + mainH - 28;
+  const at = (arr, j) => (arr ? arr[start + j] : null);
 
-  // VWAP (当日分のみ)
-  const vw = [];
-  for (let i = 0, pv = 0, vv = 0; i < G.idx; i++) {
-    const b = S.bars[i], tp = (b[2] + b[3] + b[4]) / 3;
-    pv += tp * b[5]; vv += b[5]; vw.push(vv > 0 ? pv / vv : tp);
-  }
-  const vwap = vis.map((it) => (it.prev ? null : vw[it.i]));
-
-  let lo = Infinity, hi = -Infinity, vmax = 1;
-  for (const it of vis) { lo = Math.min(lo, it.b[3]); hi = Math.max(hi, it.b[2]); vmax = Math.max(vmax, it.b[5]); }
-  const refs = [S.prev_close, G.pos ? G.avg : null, G.stop, G.tp, G.idx === 0 ? S.open : null].filter((v) => v != null);
-  for (const r of refs) { lo = Math.min(lo, r); hi = Math.max(hi, r); }
+  // 価格の範囲 (表示中の足・ライン・基準線)
+  let lo = Infinity, hi = -Infinity;
+  const take = (v) => { if (v != null && isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } };
+  vis.forEach((b, j) => {
+    take(b.h); take(b.l);
+    for (const id of ["sma5", "sma25", "sma75", "ema9", "ema20", "vwap"]) take(at(ind[id], j));
+    if (ind.bb) { take(at(ind.bb.up, j)); take(at(ind.bb.dn, j)); }
+  });
+  const prevH = prevS && CH.on.has("prevhl") ? Math.max(...prevS.bars.map((b) => b[2])) : null;
+  const prevL = prevS && CH.on.has("prevhl") ? Math.min(...prevS.bars.map((b) => b[3])) : null;
+  [S.prev_close, G.pos ? G.avg : null, G.stop, G.tp, G.idx === 0 ? S.open : null, prevH, prevL].forEach(take);
   if (!isFinite(lo)) { lo = S.prev_close * 0.99; hi = S.prev_close * 1.01; }
-  const padP = (hi - lo) * 0.08 || hi * 0.005; lo -= padP; hi += padP;
-  const y = (p) => padT + (hi - p) / (hi - lo) * priceH;
+  const padP = (hi - lo) * 0.06 || hi * 0.005; lo -= padP; hi += padP;
+  const y = (p) => padT + (hi - p) / (hi - lo) * (mainBottom - padT);
 
-  // グリッドと価格軸
-  c.font = `11px ${css("--font-num")}`; c.textBaseline = "middle";
-  const rawStep = (hi - lo) / 6, mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
-  const stepP = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= rawStep);
+  // 価格グリッド
+  c.font = fontNum; c.textBaseline = "middle"; c.textAlign = "left";
+  const niceStep = (range, k) => { const raw = range / k, mag = Math.pow(10, Math.floor(Math.log10(raw))); return [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw); };
+  const stepP = niceStep(hi - lo, 6);
   for (let p = Math.ceil(lo / stepP) * stepP; p <= hi; p += stepP) {
-    c.strokeStyle = col.grid; c.lineWidth = 1; c.beginPath(); c.moveTo(8, Math.round(y(p)) + .5); c.lineTo(8 + plotW, Math.round(y(p)) + .5); c.stroke();
-    c.fillStyle = col.muted; c.textAlign = "left"; c.fillText(fmt(p, stepP < 1 ? 1 : 0), 8 + plotW + 6, y(p));
+    const yy = Math.round(y(p)) + .5;
+    c.strokeStyle = col.grid; c.lineWidth = 1; c.beginPath(); c.moveTo(L, yy); c.lineTo(L + plotW, yy); c.stroke();
+    c.fillStyle = col.muted; c.fillText(fmt(p, stepP < 1 ? 1 : 0), L + plotW + 6, yy);
   }
 
-  // 時刻ラベル・前場/後場/前日の区切り
-  c.textAlign = "center"; c.textBaseline = "alphabetic";
-  vis.forEach((it, j) => {
-    const t = it.b[0], pt = j > 0 ? vis[j - 1] : null;
-    const newDay = pt && pt.prev && !it.prev;
-    const lunch = pt && !it.prev && !pt.prev && pt.b[0] < "12:00" && t >= "12:00";
+  // 時刻ラベル (間隔は拡大率で変える) と、前日・後場の区切り
+  const ppm = bw / CH.tf, every = [5, 10, 15, 30, 60, 120, 240].find((m) => m * ppm >= 56) || 240;
+  c.textBaseline = "alphabetic";
+  let lastLabelX = -Infinity;
+  vis.forEach((b, j) => {
+    const pb = j > 0 ? vis[j - 1] : (start > 0 ? bars[start - 1] : null);
+    const newDay = pb && pb.prev && !b.prev;
+    const lunch = pb && pb.prev === b.prev && pb.t < "12:00" && b.t >= "12:00";
     if (newDay || lunch) {
-      c.strokeStyle = col.line; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(x(j) - bw / 2, padT); c.lineTo(x(j) - bw / 2, H - padB); c.stroke(); c.setLineDash([]);
-      c.fillStyle = col.muted; c.textAlign = "left"; c.fillText(newDay ? "当日" : "後場", x(j) - bw / 2 + 4, padT - 8); c.textAlign = "center";
+      const xx = Math.round(x(j) - bw / 2) + .5;
+      c.strokeStyle = col.line; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(xx, padT); c.lineTo(xx, H - padB); c.stroke(); c.setLineDash([]);
+      c.fillStyle = col.muted; c.font = fontBody; c.textAlign = "left"; c.fillText(newDay ? "当日" : "後場", xx + 4, padT - 8);
     }
-    if (t.endsWith(":00") || t.endsWith(":30")) { c.fillStyle = col.muted; c.fillText(t, x(j), H - 6); }
+    if ((mins(b.t) % every === 0 || newDay || lunch) && x(j) - lastLabelX >= 44) {
+      c.fillStyle = col.muted; c.font = fontNum; c.textAlign = "center"; c.fillText(b.t, x(j), H - 6);
+      lastLabelX = x(j);
+    }
   });
-  if (vis.length && vis[0].prev) { c.fillStyle = col.muted; c.textAlign = "left"; c.fillText("前日", 12, padT - 8); }
-
-  // 出来高
-  const vBase = H - padB;
-  vis.forEach((it, j) => {
-    const b = it.b, h = b[5] / vmax * volH;
-    c.globalAlpha = it.prev ? 0.25 : 0.5;
-    c.fillStyle = b[4] >= b[1] ? col.up : col.down;
-    c.fillRect(x(j) - bw * 0.35, vBase - h, Math.max(1, bw * 0.7), h);
-  });
-  c.globalAlpha = 1;
+  if (vis.length && vis[0].prev) { c.fillStyle = col.muted; c.font = fontBody; c.textAlign = "left"; c.fillText("前日", 12, padT - 8); }
 
   // 基準線
   const hline = (p, color, dash, label) => {
     if (p == null) return;
     const yy = Math.round(y(p)) + .5;
-    c.strokeStyle = color; c.setLineDash(dash); c.lineWidth = 1; c.beginPath(); c.moveTo(8, yy); c.lineTo(8 + plotW, yy); c.stroke(); c.setLineDash([]);
+    c.strokeStyle = color; c.setLineDash(dash); c.lineWidth = 1; c.beginPath(); c.moveTo(L, yy); c.lineTo(L + plotW, yy); c.stroke(); c.setLineDash([]);
     if (label) {
-      c.font = `11px ${css("--font-body")}`; const w = c.measureText(label).width + 8;
-      c.fillStyle = color; c.fillRect(8 + plotW - w, yy - 15, w, 14);
-      c.fillStyle = css("--panel"); c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(label, 8 + plotW - w + 4, yy - 8); c.textBaseline = "alphabetic";
-      c.font = `11px ${css("--font-num")}`;
+      c.font = fontBody; const w = c.measureText(label).width + 8;
+      c.fillStyle = color; c.fillRect(L + plotW - w, yy - 15, w, 14);
+      c.fillStyle = col.panel; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(label, L + plotW - w + 4, yy - 8); c.textBaseline = "alphabetic";
     }
   };
+  c.save(); c.beginPath(); c.rect(0, padT - 2, W, mainBottom - padT + 4); c.clip();
   hline(S.prev_close, col.muted, [4, 4]);
+  if (prevH != null) { hline(prevH, col.muted, [1, 3], `前日高値 ${fmtP(prevH)}`); hline(prevL, col.muted, [1, 3], `前日安値 ${fmtP(prevL)}`); }
+
+  // ボリンジャーバンド (帯)
+  const line = (arr, color, width = 1.25) => {
+    if (!arr) return;
+    c.strokeStyle = color; c.lineWidth = width; c.beginPath(); let on = false;
+    vis.forEach((_, j) => { const v = at(arr, j); if (v == null) { on = false; return; } if (!on) { c.moveTo(x(j), y(v)); on = true; } else c.lineTo(x(j), y(v)); });
+    c.stroke(); c.lineWidth = 1;
+  };
+  if (ind.bb) {
+    const bbc = css("--bb");
+    c.fillStyle = bbc; c.globalAlpha = 0.08; c.beginPath(); let first = true, last = -1;
+    vis.forEach((_, j) => { const v = at(ind.bb.up, j); if (v == null) return; if (first) { c.moveTo(x(j), y(v)); first = false; } else c.lineTo(x(j), y(v)); last = j; });
+    for (let j = last; j >= 0; j--) { const v = at(ind.bb.dn, j); if (v == null) break; c.lineTo(x(j), y(v)); }
+    c.closePath(); if (!first) c.fill(); c.globalAlpha = 1;
+    line(ind.bb.up, bbc, 1); line(ind.bb.dn, bbc, 1);
+    c.setLineDash([4, 3]); line(ind.bb.mid, bbc, 1); c.setLineDash([]);
+  }
+
+  // ローソク足
+  vis.forEach((b, j) => {
+    c.globalAlpha = b.prev ? 0.4 : 1;
+    c.strokeStyle = c.fillStyle = b.c >= b.o ? col.up : col.down;
+    const xx = Math.round(x(j)) + .5;
+    c.beginPath(); c.moveTo(xx, y(b.h)); c.lineTo(xx, y(b.l)); c.stroke();
+    const w = Math.max(1, bw * 0.7);
+    c.fillRect(x(j) - w / 2, y(Math.max(b.o, b.c)), w, Math.max(1, Math.abs(y(b.o) - y(b.c))));
+  });
+  c.globalAlpha = 1;
+
+  // ライン系の指標
+  for (const d of IND) if (d.group === "line" && d.id !== "bb" && d.id !== "prevhl") line(ind[d.id], css(d.color), d.id === "vwap" ? 1.75 : 1.25);
+
   if (G.pos) hline(G.avg, col.fg, [2, 2], `建値 ${fmtP(G.avg)}`);
   if (G.stop != null) hline(G.stop, col.down, [6, 3], `損切り ${fmtP(G.stop)}`);
   if (G.tp != null) hline(G.tp, col.up, [6, 3], `利確 ${fmtP(G.tp)}`);
   if (G.idx === 0 && S.open != null) hline(S.open, col.accent, [1, 3], `寄り値 ${fmtP(S.open)}`);
 
-  // ローソク足
-  vis.forEach((it, j) => {
-    const [, o, h, l, cl] = it.b, upBar = cl >= o;
-    c.globalAlpha = it.prev ? 0.35 : 1;
-    c.strokeStyle = c.fillStyle = upBar ? col.up : col.down;
-    const xx = Math.round(x(j)) + .5;
-    c.beginPath(); c.moveTo(xx, y(h)); c.lineTo(xx, y(l)); c.stroke();
-    const top = y(Math.max(o, cl)), bh = Math.max(1, Math.abs(y(o) - y(cl))), w = Math.max(1, bw * 0.7);
-    c.fillRect(x(j) - w / 2, top, w, bh);
-  });
-  c.globalAlpha = 1;
-
-  // VWAP
-  c.strokeStyle = col.accent; c.lineWidth = 1.5; c.beginPath(); let started = false;
-  vwap.forEach((v, j) => { if (v == null) return; if (!started) { c.moveTo(x(j), y(v)); started = true; } else c.lineTo(x(j), y(v)); });
-  c.stroke(); c.lineWidth = 1;
-
-  // 約定マーク
-  const off = all.length - vis.length, pn = prevBars.length;
+  // 約定マーク (足種を変えても、その約定を含む足に置く)
   for (const m of G.marks) {
-    const k = (m.i < 0 ? 0 : Math.min(m.i, G.idx - 1)) + pn - off;
-    if (k < 0 || k >= vis.length) continue;
-    const xx = x(k), yy = y(m.price), s = 6;
-    c.fillStyle = m.side > 0 ? col.up : col.down; c.strokeStyle = css("--panel");
+    const raw = m.i < 0 ? 0 : Math.min(m.i, G.idx - 1);
+    const a = today.findIndex((b) => b.first <= raw && raw <= b.last);
+    const j = prevLen + a - start;
+    if (a < 0 || j < 0 || j >= vis.length) continue;
+    const xx = x(j), yy = y(m.price), s = 6;
+    c.fillStyle = m.side > 0 ? col.up : col.down; c.strokeStyle = col.panel;
     c.beginPath();
     if (m.side > 0) { c.moveTo(xx, yy); c.lineTo(xx - s, yy + s * 1.6); c.lineTo(xx + s, yy + s * 1.6); }
     else { c.moveTo(xx, yy); c.lineTo(xx - s, yy - s * 1.6); c.lineTo(xx + s, yy - s * 1.6); }
     c.closePath(); c.fill(); c.stroke();
   }
+  c.restore();
 
   // 現在値ラベル
+  c.font = fontNum;
   if (G.idx > 0 && !G.done) {
-    const p = curPrice(), yy = y(p);
-    c.fillStyle = col.fg; c.fillRect(8 + plotW + 2, yy - 8, padR - 4, 16);
-    c.fillStyle = css("--panel"); c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(fmtP(p), 8 + plotW + 6, yy); c.textBaseline = "alphabetic";
+    const p = curPrice(), yy = Math.max(padT, Math.min(mainBottom, y(p)));
+    c.fillStyle = col.fg; c.fillRect(L + plotW + 2, yy - 8, padR - 4, 16);
+    c.fillStyle = col.panel; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(fmtP(p), L + plotW + 6, yy); c.textBaseline = "alphabetic";
   }
 
-  // ホバー
+  // 下段の指標
+  const paneBox = {};
+  panes.forEach((p, k) => {
+    const top = mainBottom + 6 + k * paneH, bot = top + paneH - 8;
+    paneBox[p] = [top, bot];
+    c.strokeStyle = col.line; c.beginPath(); c.moveTo(L, Math.round(top) - .5); c.lineTo(L + plotW, Math.round(top) - .5); c.stroke();
+    const sc = (v, a, b) => bot - (v - a) / (b - a) * (bot - top - 12);
+    const pline = (arr, color, a, b) => {
+      c.strokeStyle = color; c.lineWidth = 1.25; c.beginPath(); let on = false;
+      vis.forEach((_, j) => { const v = at(arr, j); if (v == null) { on = false; return; } if (!on) { c.moveTo(x(j), sc(v, a, b)); on = true; } else c.lineTo(x(j), sc(v, a, b)); });
+      c.stroke(); c.lineWidth = 1;
+    };
+    const level = (v, a, b, text) => {
+      const yy = Math.round(sc(v, a, b)) + .5;
+      c.strokeStyle = col.grid; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(L, yy); c.lineTo(L + plotW, yy); c.stroke(); c.setLineDash([]);
+      c.fillStyle = col.muted; c.font = fontNum; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(text, L + plotW + 6, yy); c.textBaseline = "alphabetic";
+    };
+    let label = "";
+    const hj = hoverIdx != null && hoverIdx < vis.length ? hoverIdx : vis.length - 1;
+    if (p === "vol") {
+      const vmax = Math.max(1, ...vis.map((b) => b.v));
+      vis.forEach((b, j) => {
+        const h = b.v / vmax * (bot - top - 12);
+        c.globalAlpha = b.prev ? 0.3 : 0.6; c.fillStyle = b.c >= b.o ? col.up : col.down;
+        c.fillRect(x(j) - bw * 0.35, bot - h, Math.max(1, bw * 0.7), h);
+      });
+      c.globalAlpha = 1;
+      label = `出来高 ${vis[hj] ? fmt(vis[hj].v) : ""}`;
+    } else if (p === "rsi") {
+      level(70, 0, 100, "70"); level(30, 0, 100, "30");
+      pline(ind.rsi, css("--i2"), 0, 100);
+      label = `RSI 14  ${at(ind.rsi, hj) != null ? at(ind.rsi, hj).toFixed(1) : "—"}`;
+    } else if (p === "stoch") {
+      level(80, 0, 100, "80"); level(20, 0, 100, "20");
+      pline(ind.stoch.k, css("--i1"), 0, 100); pline(ind.stoch.d, css("--i4"), 0, 100);
+      const kv = at(ind.stoch.k, hj), dv = at(ind.stoch.d, hj);
+      label = `ストキャス  %K ${kv != null ? kv.toFixed(1) : "—"}  %D ${dv != null ? dv.toFixed(1) : "—"}`;
+    } else if (p === "macd") {
+      let m = 0;
+      vis.forEach((_, j) => { for (const arr of [ind.macd.line, ind.macd.sig, ind.macd.hist]) { const v = at(arr, j); if (v != null) m = Math.max(m, Math.abs(v)); } });
+      m = m || 1;
+      level(0, -m, m, "0");
+      vis.forEach((_, j) => {
+        const v = at(ind.macd.hist, j); if (v == null) return;
+        c.globalAlpha = 0.45; c.fillStyle = v >= 0 ? col.up : col.down;
+        const y0 = sc(0, -m, m), y1 = sc(v, -m, m);
+        c.fillRect(x(j) - bw * 0.35, Math.min(y0, y1), Math.max(1, bw * 0.7), Math.max(1, Math.abs(y1 - y0)));
+      });
+      c.globalAlpha = 1;
+      pline(ind.macd.line, css("--i1"), -m, m); pline(ind.macd.sig, css("--i4"), -m, m);
+      const mv = at(ind.macd.line, hj), sv = at(ind.macd.sig, hj), d = G.tick < 1 ? 2 : 1;
+      label = `MACD ${mv != null ? mv.toFixed(d) : "—"}  シグナル ${sv != null ? sv.toFixed(d) : "—"}`;
+    }
+    c.fillStyle = col.muted; c.font = fontBody; c.textAlign = "left"; c.fillText(label, L + 4, top + 11);
+  });
+
+  // ホバー (縦線 + 価格)
   const hv = $("hover");
   if (hoverIdx != null && hoverIdx < vis.length) {
-    const it = vis[hoverIdx], [t, o, h, l, cl, v] = it.b;
-    hv.textContent = `${it.prev ? "前日 " : ""}${t}  始${fmtP(o)} 高${fmtP(h)} 安${fmtP(l)} 終${fmtP(cl)}  出来高${fmt(v)}${!it.prev && vwap[hoverIdx] ? "  VWAP " + fmt(vwap[hoverIdx], 1) : ""}`;
-    c.strokeStyle = col.muted; c.globalAlpha = .5; c.beginPath(); c.moveTo(Math.round(x(hoverIdx)) + .5, padT); c.lineTo(Math.round(x(hoverIdx)) + .5, H - padB); c.stroke(); c.globalAlpha = 1;
+    const b = vis[hoverIdx];
+    const parts = [`${b.prev ? "前日 " : ""}${b.t}`, `始${fmtP(b.o)} 高${fmtP(b.h)} 安${fmtP(b.l)} 終${fmtP(b.c)}`];
+    for (const d of IND) {
+      if (d.group !== "line" || !ind[d.id] || d.id === "bb") continue;
+      const v = at(ind[d.id], hoverIdx); if (v != null) parts.push(`${d.label} ${fmt(v, 1)}`);
+    }
+    hv.textContent = parts.join("  ");
+    const xx = Math.round(x(hoverIdx)) + .5;
+    c.strokeStyle = col.muted; c.globalAlpha = .5; c.beginPath(); c.moveTo(xx, padT); c.lineTo(xx, H - padB); c.stroke();
+    if (hoverY != null && hoverY >= padT && hoverY <= mainBottom) {
+      c.beginPath(); c.moveTo(L, Math.round(hoverY) + .5); c.lineTo(L + plotW, Math.round(hoverY) + .5); c.stroke();
+      c.globalAlpha = 1;
+      const p = hi - (hoverY - padT) / (mainBottom - padT) * (hi - lo);
+      c.fillStyle = col.muted; c.fillRect(L + plotW + 2, hoverY - 8, padR - 4, 16);
+      c.fillStyle = col.panel; c.font = fontNum; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(fmt(p, G.tick < 1 ? 1 : 0), L + plotW + 6, hoverY); c.textBaseline = "alphabetic";
+    }
+    c.globalAlpha = 1;
   } else {
     hv.textContent = G.idx === 0 ? `寄り前  前日終値 ${fmtP(S.prev_close)}${S.open != null ? `  寄り値 ${fmtP(S.open)} (${(((S.open / S.prev_close) - 1) * 100).toFixed(2)}%)` : ""}` : "";
   }
-  drawChart.geom = { bw, n: vis.length };
+  drawChart.geom = { bw, n: vis.length, L, total, nView: n };
+  renderLegend();
+}
+
+function renderLegend() {
+  $("legend").innerHTML = IND.filter((d) => d.group === "line" && CH.on.has(d.id))
+    .map((d) => `<span><i style="background:var(${d.color})"></i>${d.label}</span>`).join("");
+  $("z-info").textContent = `${CH.tf} 分足 ・ ${Math.round(CH.view)} 本表示${CH.offset >= 1 ? " ・ 過去を表示中" : ""}`;
+  $("z-live").disabled = CH.offset < 1;
+}
+
+// ---- 拡大・縮小・スクロール ---------------------------------------------------
+function zoom(factor) {
+  const total = drawChart.geom ? drawChart.geom.total : 400;
+  CH.view = Math.max(15, Math.min(Math.max(60, total + 6), CH.view * factor));
+  saveChart(); drawChart();
+}
+function zoomFit() { CH.view = Math.max(30, (drawChart.geom ? drawChart.geom.total : 300)); CH.offset = 0; saveChart(); drawChart(); }
+function goLive() { CH.offset = 0; drawChart(); }
+
+function buildChartTools() {
+  const grid = $("ind-grid");
+  const group = (g, title) => `<fieldset><legend>${title}</legend>${IND.filter((d) => d.group === g).map((d) =>
+    `<label class="chk" for="ind-${d.id}"><input type="checkbox" id="ind-${d.id}" data-id="${d.id}"${CH.on.has(d.id) ? " checked" : ""}>${d.color ? `<i style="background:var(${d.color})"></i>` : ""}${d.label}</label>`).join("")}</fieldset>`;
+  grid.innerHTML = group("line", "チャートに重ねる") + group("pane", "下段に表示");
+  grid.addEventListener("change", (e) => {
+    const id = e.target.dataset.id; if (!id) return;
+    e.target.checked ? CH.on.add(id) : CH.on.delete(id);
+    saveChart(); drawChart();
+  });
+  $("tf").value = String(CH.tf);
+  $("tf").onchange = (e) => { CH.tf = +e.target.value; CH.offset = 0; saveChart(); drawChart(); };
+  $("z-in").onclick = () => zoom(1 / 1.4);
+  $("z-out").onclick = () => zoom(1.4);
+  $("z-fit").onclick = zoomFit;
+  $("z-live").onclick = goLive;
+  document.addEventListener("click", (e) => { const d = $("ind"); if (d.open && !d.contains(e.target)) d.open = false; });
+}
+
+function bindChartPointer() {
+  const cv = $("chart"), pts = new Map();
+  let drag = null, pinch = null;
+  const idxAt = (clientX) => {
+    const g = drawChart.geom; if (!g) return null;
+    const r = cv.getBoundingClientRect(), k = Math.floor((clientX - r.left - g.L) / g.bw);
+    return k >= 0 && k < g.n ? k : null;
+  };
+  cv.addEventListener("pointerdown", (e) => {
+    pts.set(e.pointerId, e.clientX);
+    cv.setPointerCapture(e.pointerId);
+    if (pts.size === 1) drag = { x: e.clientX, off: CH.offset, moved: false };
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.abs(a - b) || 1, view: CH.view }; drag = null; }
+  });
+  cv.addEventListener("pointermove", (e) => {
+    if (!G) return;
+    const r = cv.getBoundingClientRect();
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, e.clientX);
+    if (pinch && pts.size >= 2) {
+      const [a, b] = [...pts.values()];
+      CH.view = Math.max(15, Math.min(1000, pinch.view * pinch.d / (Math.abs(a - b) || 1)));
+      drawChart(); return;
+    }
+    if (drag && pts.has(e.pointerId)) {
+      const dx = e.clientX - drag.x;
+      if (Math.abs(dx) > 3) drag.moved = true;
+      if (drag.moved && drawChart.geom) { CH.offset = Math.max(0, drag.off + dx / drawChart.geom.bw); hoverIdx = null; drawChart(); return; }
+    }
+    hoverIdx = idxAt(e.clientX); hoverY = e.clientY - r.top; drawChart();
+  });
+  const up = (e) => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (pts.size === 0) { if (drag && drag.moved) saveChart(); drag = null; }
+  };
+  cv.addEventListener("pointerup", up);
+  cv.addEventListener("pointercancel", up);
+  cv.addEventListener("pointerleave", (e) => { if (!pts.size) { hoverIdx = null; hoverY = null; drawChart(); } });
+  cv.addEventListener("dblclick", zoomFit);
+  cv.addEventListener("wheel", (e) => {
+    if (!G) return;
+    e.preventDefault();
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey) {
+      const d = e.shiftKey ? e.deltaY : e.deltaX;
+      CH.offset = Math.max(0, CH.offset - d / (drawChart.geom ? drawChart.geom.bw : 5));
+      drawChart();
+    } else zoom(e.deltaY > 0 ? 1.15 : 1 / 1.15);
+  }, { passive: false });
 }
 
 // ---- 入力 -----------------------------------------------------------------
@@ -696,15 +1045,14 @@ function bind() {
     else if (k === "s") $("b-sell").click();
     else if (k === "c") $("b-flat").click();
     else if (k === "n") $("b-new").click();
+    else if (k === "+" || k === "=") zoom(1 / 1.4);
+    else if (k === "-") zoom(1.4);
+    else if (k === "0") zoomFit();
+    else if (k === "arrowleft") { e.preventDefault(); CH.offset += Math.max(1, CH.view / 10); drawChart(); }
+    else if (k === "end") goLive();
   });
-  const cv = $("chart");
-  cv.addEventListener("pointermove", (e) => {
-    const g = drawChart.geom; if (!g) return;
-    const r = cv.getBoundingClientRect(), k = Math.floor((e.clientX - r.left - 8) / g.bw);
-    hoverIdx = k >= 0 && k < g.n ? k : null; drawChart();
-  });
-  cv.addEventListener("pointerleave", () => { hoverIdx = null; drawChart(); });
-  cv.addEventListener("wheel", (e) => { e.preventDefault(); viewBars = Math.max(30, Math.min(700, Math.round(viewBars * (e.deltaY > 0 ? 1.15 : 0.87)))); drawChart(); }, { passive: false });
+  buildChartTools();
+  bindChartPointer();
   window.addEventListener("resize", () => G && drawChart());
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => G && drawChart());
   new MutationObserver(() => G && drawChart()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
