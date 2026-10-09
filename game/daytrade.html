@@ -301,6 +301,9 @@ button, summary, select { touch-action: manipulation; }
           <label for="s-blind">銘柄・日付
             <select id="s-blind"><option value="1" selected>伏せる</option><option value="0">表示</option></select>
           </label>
+          <label for="s-days">ランダムで出す日
+            <select id="s-days"><option value="1m" selected>1分足の日だけ</option><option value="all">5分足の日も含む</option></select>
+          </label>
         </div>
         <div class="note">資産 = 初期資金 + これまでの累計損益。建玉の上限は、その日の始めの資産の 3.3 倍 (信用取引の目安)。自動損切り・利確は建玉の平均単価から設定し、0 で無効。</div>
         <div class="row">
@@ -465,9 +468,9 @@ function playable() {
 
 function fillPicker() {
   const sel = $("pick");
-  const list = playable(), done = played();
-  const left = list.filter((i) => !done.has(sessionKey(DATA.sessions[i]))).length;
-  sel.innerHTML = `<option value="">ランダム (未プレイ ${left} / ${list.length} 日)</option>`;
+  const list = playable(), done = played(), pool = randomPool();
+  const left = pool.filter((i) => !done.has(sessionKey(DATA.sessions[i]))).length;
+  sel.innerHTML = `<option value="">ランダム (未プレイ ${left} / ${pool.length} 日)</option>`;
   let group = null, code = null;
   for (const i of list) {
     const s = DATA.sessions[i];
@@ -479,8 +482,13 @@ function fillPicker() {
 }
 
 // まだ遊んでいない日から選ぶ。全部遊んだら全体から。
+// 「1分足の日だけ」なら 5 分足の日を除く (選択欄から直接選ぶのは自由)
+function randomPool() {
+  const list = playable();
+  return $("s-days").value === "all" ? list : list.filter((i) => DATA.sessions[i].interval !== "5m");
+}
 function randomSession() {
-  const list = playable(), done = played();
+  const list = randomPool(), done = played();
   const fresh = list.filter((i) => !done.has(sessionKey(DATA.sessions[i])));
   const pool = fresh.length ? fresh : list;
   return pool[Math.floor(Math.random() * pool.length)];
@@ -1302,6 +1310,14 @@ function bind() {
   $("r-close").onclick = () => $("result").close();
   $("r-next").onclick = () => { $("result").close(); startSession(null); };
   $("s-blind").onchange = updateHeader;
+  $("s-days").value = storage("dt-days") || "1m";
+  $("s-days").onchange = () => {
+    storage("dt-days", $("s-days").value);
+    if (!DATA) return;
+    fillPicker();
+    // 5 分足の日を遊んでいて、まだ売買していなければ 1 分足の日に替える
+    if ($("s-days").value === "1m" && S && S.interval === "5m" && G && !G.fills.length) startSession(null);
+  };
   $("s-cap").onchange = () => {
     ACC.start = Math.max(100000, Math.round(+$("s-cap").value || 3000000)); $("s-cap").value = ACC.start;
     saveAccount(); if (G) render();
