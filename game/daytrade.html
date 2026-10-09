@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>分足リプレイ道場</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -114,6 +116,44 @@ dialog h3 { font-family: var(--font-display); font-weight: 400; font-size: 20px;
 .note { font-size: 12px; color: var(--muted); line-height: 1.6; }
 .loader { background: var(--panel); border: 1px dashed var(--line); border-radius: 4px; padding: 24px; display: grid; gap: 10px; }
 details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+button, summary, select { touch-action: manipulation; }
+.settings summary { list-style: none; cursor: pointer; }
+.settings summary::-webkit-details-marker { display: none; }
+.settings summary h2::after { content: " ▾"; }
+.settings:not([open]) summary h2::after { content: " ▸"; }
+.sp-only, .mbar { display: none; }
+@media (max-width: 600px) {
+  .pc-only { display: none; }
+  .sp-only { display: inline; }
+  .wrap { padding-block: 8px calc(124px + env(safe-area-inset-bottom, 0px)); gap: 10px; }
+  header { gap: 4px 12px; }
+  h1 { font-size: 17px; }
+  header .phase, header .clock, header .sp { display: none; }
+  .meta { font-size: 12px; gap: 2px 12px; }
+  .zinfo, kbd { display: none; }
+  .charttools { gap: 6px; flex-wrap: nowrap; }
+  .charttools select, #ind summary, .zoom button { padding: 0 10px; height: 40px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+  .charttools select { display: block; }
+  .zoom button { min-width: 38px; }
+  .indgrid { position: fixed; left: 16px; right: 16px; width: auto; top: auto; bottom: calc(132px + env(safe-area-inset-bottom, 0px)); max-height: 55vh; overflow: auto; z-index: 30; }
+  .hover { white-space: normal; min-height: 2.8em; font-size: 11px; }
+  .legend { font-size: 10px; gap: 4px 8px; }
+  #b-step, #b-step5, #b-play, .trade, .pnlcard { display: none; }
+  .controls { gap: 6px; }
+  .controls .sp { display: none; }
+  #pick { flex: 1 1 100%; order: 3; }
+  input[type=number], select { font-size: 16px; }
+  .card { padding: 10px; }
+  .mbar { display: grid; gap: 6px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--panel); border-top: 1px solid var(--line); padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -4px 16px rgba(0, 0, 0, .12); }
+  .mstat { display: flex; align-items: baseline; gap: 10px; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); }
+  .mb-pnl { font-size: 20px; font-weight: 600; color: var(--fg); }
+  .mb-pnl.gain { color: var(--gain); }
+  .mb-pnl.loss { color: var(--loss); }
+  .mb-pos { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mb-time b { color: var(--fg); font-size: 15px; font-weight: 600; }
+  .mbtn { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 52px; gap: 6px; }
+  .mbtn button { min-height: 48px; padding: 0 4px; font-weight: 700; font-size: 15px; }
+}
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -150,10 +190,10 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
         <button id="z-out" title="縮小 (−キー)">−</button>
         <button id="z-in" title="拡大 (+キー)">＋</button>
         <button id="z-fit" title="全体を表示 (0キー)">全体</button>
-        <button id="z-live" title="最新の足へ (Endキー)">最新へ</button>
+        <button id="z-live" title="最新の足へ (Endキー)">最新</button>
       </div>
       <details id="ind">
-        <summary>インジケーター</summary>
+        <summary>指標</summary>
         <div class="indgrid" id="ind-grid"></div>
       </details>
       <span class="zinfo" id="z-info"></span>
@@ -165,7 +205,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
       </div>
       <canvas id="chart"></canvas>
     </div>
-    <div class="note">ホイール・ピンチで拡大縮小、ドラッグで過去へスクロール、ダブルクリックで全体表示。</div>
+    <div class="note"><span class="pc-only">ホイールで拡大縮小、ドラッグで過去へスクロール、ダブルクリックで全体表示。</span><span class="sp-only">ピンチで拡大縮小、横スワイプで過去へ、タップで値を表示。</span></div>
     <div class="controls" id="controls">
       <button id="b-step">次の足<kbd>→</kbd></button>
       <button id="b-step5">5 本</button>
@@ -183,7 +223,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
     </div>
 
     <div class="side">
-      <div class="card">
+      <div class="card pnlcard">
         <h2>損益</h2>
         <div class="big" id="pnl">0</div>
         <dl class="kv">
@@ -216,8 +256,8 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
         <div class="msg" id="msg"></div>
       </div>
 
-      <div class="card">
-        <h2>設定</h2>
+      <details class="card settings" id="settings" open>
+        <summary><h2>設定</h2></summary>
         <div class="grid2">
           <label for="s-slip">滑り (呼値何個分)
             <select id="s-slip"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select>
@@ -239,7 +279,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
           </label>
         </div>
         <div class="note">建玉の上限は資金の 3.3 倍 (信用取引の目安)。自動損切り・利確は建玉の平均単価から設定し、0 で無効。</div>
-      </div>
+      </details>
     </div>
   </div>
 
@@ -264,6 +304,21 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   <div class="note">
     データ: Yahoo Finance の 1 分足。9:00〜9:04 の足と大引けの板寄せは元データにないため、寄り値と引け値は日足の値を使う
     (9:00 前の成行は寄り値、引けまでの建玉は引け値で精算)。板と歩み値はない。
+  </div>
+</div>
+
+<div class="mbar" id="mbar">
+  <div class="mstat">
+    <span class="mb-pnl" id="mb-pnl">0</span>
+    <span class="mb-pos" id="mb-pos">建玉なし</span>
+    <span class="mb-time"><span id="mb-phase">寄り前</span> <b id="mb-clock">08:59</b></span>
+  </div>
+  <div class="mbtn">
+    <button class="buy" data-for="b-buy">買い</button>
+    <button class="sell" data-for="b-sell">売り</button>
+    <button data-for="b-flat">決済</button>
+    <button data-for="b-step" id="mb-step">次へ</button>
+    <button data-for="b-play" id="mb-play" aria-label="再生">▶</button>
   </div>
 </div>
 
@@ -498,8 +553,9 @@ function play() {
     timer = setTimeout(tick, +$("speed").value);
   };
   timer = setTimeout(tick, +$("speed").value);
+  syncMbar();
 }
-function stop() { if (timer) clearTimeout(timer); timer = null; $("b-play").firstChild.textContent = "再生"; }
+function stop() { if (timer) clearTimeout(timer); timer = null; $("b-play").firstChild.textContent = "再生"; syncMbar(); }
 
 // ---- 結果 -----------------------------------------------------------------
 function stats() {
@@ -569,6 +625,23 @@ function render() {
   $("b-step").firstChild.textContent = G.idx >= S.bars.length && !G.done ? "大引け精算" : "次の足";
   renderFills();
   drawChart();
+  syncMbar();
+}
+
+// スマホ用の下部バー。中身は PC 用の表示とボタンの状態を写す。
+function syncMbar() {
+  if (!G) return;
+  const u = unrealized(), total = G.realized + u;
+  const pe = $("mb-pnl"); pe.textContent = signed(total); cls(pe, total);
+  $("mb-pos").textContent = G.pos === 0
+    ? `建玉なし ・ ${fmtP(curPrice())}`
+    : `${G.pos > 0 ? "買" : "売"}${fmt(Math.abs(G.pos))} @${fmtP(G.avg)} 評価${signed(u)}`;
+  $("mb-clock").textContent = $("m-clock").textContent;
+  $("mb-phase").textContent = $("m-phase").textContent;
+  for (const b of document.querySelectorAll("#mbar [data-for]")) b.disabled = $(b.dataset.for).disabled;
+  $("mb-step").textContent = G.idx >= S.bars.length && !G.done ? "大引け" : "次へ";
+  $("mb-play").textContent = timer ? "❚❚" : "▶";
+  $("mb-play").setAttribute("aria-label", timer ? "停止" : "再生");
 }
 
 function renderFills() {
@@ -710,7 +783,7 @@ function drawChart() {
   const cv = $("chart"), dpr = window.devicePixelRatio || 1;
   const panes = ["vol", "rsi", "macd", "stoch"].filter((p) => CH.on.has(p));
   const phone = window.innerWidth < 600;
-  const mainH = phone ? 300 : 400, paneH = phone ? 64 : 84;
+  const mainH = phone ? Math.round(Math.min(360, Math.max(240, window.innerHeight * 0.42))) : 400, paneH = phone ? 64 : 84;
   const cssH = mainH + panes.length * paneH + 22;
   if (cv.style.height !== cssH + "px") cv.style.height = cssH + "px";
   const W = cv.clientWidth, H = cssH;
@@ -720,7 +793,7 @@ function drawChart() {
   c.clearRect(0, 0, W, H);
   const col = { fg: css("--fg"), muted: css("--muted"), grid: css("--grid"), up: css("--up"), down: css("--down"),
     accent: css("--accent"), line: css("--line"), panel: css("--panel") };
-  const fontNum = `11px ${css("--font-num")}`, fontBody = `11px ${css("--font-body")}`;
+  const fs = phone ? 10 : 11, fontNum = `${fs}px ${css("--font-num")}`, fontBody = `${fs}px ${css("--font-body")}`;
 
   const { bars, ind, prevLen, today } = series();
   const total = bars.length;
@@ -728,7 +801,7 @@ function drawChart() {
   CH.offset = Math.max(0, Math.min(CH.offset, total - Math.min(n, total)));
   const end = total - Math.round(CH.offset), start = Math.max(0, end - n);
   const vis = bars.slice(start, end);
-  const padR = 64, padT = 22, padB = 22, L = 8;
+  const padR = phone ? 52 : 64, padT = 22, padB = 22, L = phone ? 4 : 8;
   const plotW = W - padR - L;
   const slots = n + (CH.offset < 1 ? 6 : 0), bw = plotW / slots;
   const x = (j) => L + j * bw + bw / 2;
@@ -1003,13 +1076,18 @@ function bindChartPointer() {
     hoverIdx = idxAt(e.clientX); hoverY = e.clientY - r.top; drawChart();
   });
   const up = (e) => {
+    // タッチで動かさずに離したら、その位置の値を表示する
+    if (e.pointerType !== "mouse" && drag && !drag.moved && pts.size === 1 && G) {
+      const r = cv.getBoundingClientRect();
+      hoverIdx = idxAt(e.clientX); hoverY = e.clientY - r.top; drawChart();
+    }
     pts.delete(e.pointerId);
     if (pts.size < 2) pinch = null;
     if (pts.size === 0) { if (drag && drag.moved) saveChart(); drag = null; }
   };
   cv.addEventListener("pointerup", up);
   cv.addEventListener("pointercancel", up);
-  cv.addEventListener("pointerleave", (e) => { if (!pts.size) { hoverIdx = null; hoverY = null; drawChart(); } });
+  cv.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse" && !pts.size) { hoverIdx = null; hoverY = null; drawChart(); } });
   cv.addEventListener("dblclick", zoomFit);
   cv.addEventListener("wheel", (e) => {
     if (!G) return;
@@ -1024,6 +1102,11 @@ function bindChartPointer() {
 
 // ---- 入力 -----------------------------------------------------------------
 function bind() {
+  for (const b of document.querySelectorAll("#mbar [data-for]")) b.onclick = () => $(b.dataset.for).click();
+  new MutationObserver(() => {
+    const t = $("msg").textContent;
+    if (t && window.innerWidth < 600) $("mb-pos").textContent = t;
+  }).observe($("msg"), { childList: true, characterData: true, subtree: true });
   $("b-buy").onclick = () => placeMarket(1, +$("qty").value, "成行");
   $("b-sell").onclick = () => placeMarket(-1, +$("qty").value, "成行");
   $("b-flat").onclick = () => { if (G.pos) placeMarket(-Math.sign(G.pos), Math.abs(G.pos), "全決済"); };
@@ -1059,6 +1142,7 @@ function bind() {
 }
 
 function boot() {
+  if (window.innerWidth < 600) $("settings").open = false;
   bind(); renderHistory();
   if (!DATA) {
     $("loader").hidden = false; $("game").hidden = true;
