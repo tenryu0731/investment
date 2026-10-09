@@ -98,6 +98,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 kbd { font-family: var(--font-num); font-size: 11px; opacity: .75; font-weight: 400; margin-left: 4px; }
 label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
 input[type=number], select { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; width: 100%; box-sizing: border-box; font-family: var(--font-num); }
+.qtybox { display: grid; gap: 6px; }
+.qtyrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.hint { font-family: var(--font-num); color: var(--muted); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .controls .sp { flex: 1; }
@@ -248,9 +251,14 @@ button, summary, select { touch-action: manipulation; }
 
       <div class="card">
         <h2>発注 (成行: 次の足の始値で約定)</h2>
-        <label for="qty">数量 (株)
-          <input type="number" id="qty" min="100" step="100" value="100">
-        </label>
+        <div class="qtybox">
+          <label for="qty">数量 (株) <span class="hint" id="qty-max"></span></label>
+          <div class="qtyrow">
+            <input type="number" id="qty" min="100" step="100" value="100">
+            <button id="b-max" title="建てられる上限まで (Mキー)">最大</button>
+          </div>
+          <label class="chk" for="s-max"><input type="checkbox" id="s-max">常に最大で発注 (反対の売買は決済だけ)</label>
+        </div>
         <div class="trade">
           <button class="buy" id="b-buy">買い<kbd>B</kbd></button>
           <button class="sell" id="b-sell">売り<kbd>S</kbd></button>
@@ -543,22 +551,35 @@ function checkExits(b, i) {
 
 function unrealized() { return G.pos === 0 ? 0 : (curPrice() - G.avg) * G.pos; }
 
+// side 方向に発注できる上限株数 (100 株単位)。反対方向は決済分 + 新規の上限。
+function maxQty(side, price) {
+  const lim = price > 0 ? Math.floor(G.cap * LEVERAGE / price / 100) * 100 : 0;
+  if (G.pos === 0 || Math.sign(G.pos) === side) return Math.max(0, lim - Math.abs(G.pos));
+  return Math.abs(G.pos) + lim;
+}
+
+// qty が null なら「常に最大」: 同じ方向は上限まで、反対方向は決済だけ。
 function placeMarket(side, qty, reason) {
   if (G.done) return;
   if (G.idx >= S.bars.length) { $("msg").textContent = "ザラ場は終わりました。次へで大引け精算します。"; return; }
-  qty = Math.floor(qty / 100) * 100;
-  if (qty < 100) { $("msg").textContent = "数量は 100 株単位で入力してください。"; return; }
-  const after = G.pos + side * qty;
   const px = G.idx === 0 && S.open != null ? S.open : S.bars[G.idx][1];
-  if (Math.abs(after) > Math.abs(G.pos) && Math.abs(after) * px > G.cap * LEVERAGE) {
-    $("msg").textContent = `建玉が上限 (${fmt(G.cap * LEVERAGE)} 円) を超えます。数量を減らしてください。`;
-    return;
+  const mx = maxQty(side, px);
+  if (qty == null) qty = G.pos !== 0 && Math.sign(G.pos) !== side ? Math.abs(G.pos) : mx;
+  qty = Math.floor(qty / 100) * 100;
+  let note = "";
+  if (qty > mx || mx < 100) {
+    if (mx < 100) { $("msg").textContent = `建玉の上限 (${fmt(G.cap * LEVERAGE)} 円) に達しています。`; return; }
+    note = `上限に合わせて ${fmt(mx)} 株で発注しました。`;
+    qty = mx;
   }
+  if (qty < 100) { $("msg").textContent = "数量は 100 株単位で入力してください。"; return; }
   revealBar({ side, qty, reason });
   completeBar();
-  $("msg").textContent = "";
+  $("msg").textContent = note;
   afterStep();
 }
+
+function orderQty() { return $("s-max").checked ? null : +$("qty").value; }
 
 function step(n = 1) {
   if (G.done) return;
@@ -672,6 +693,12 @@ function render() {
   $("equity").textContent = fmt(Math.round(G.done ? ACC.start + ACC.realized : equityNow())) + " 円";
   const ce = $("cum"); ce.textContent = signed(cum); cls(ce, cum);
   $("start").textContent = fmt(ACC.start);
+  {
+    const p = curPrice(), side = G.pos < 0 ? -1 : 1, mx = maxQty(side, p);
+    $("qty-max").textContent = G.pos === 0
+      ? `最大 ${fmt(mx)} 株 (約 ${fmt(Math.round(mx * p / 10000))} 万円)`
+      : `${G.pos > 0 ? "買い" : "売り"}増し最大 ${fmt(mx)} 株`;
+  }
   $("pos").textContent = G.pos === 0 ? "なし" : `${G.pos > 0 ? "買" : "売"} ${fmt(Math.abs(G.pos))} 株`;
   $("avg").textContent = G.pos === 0 ? "—" : fmtP(G.avg);
   const ue = $("unreal"); ue.textContent = signed(u); cls(ue, u);
@@ -1173,8 +1200,16 @@ function bind() {
     const t = $("msg").textContent;
     if (t && window.innerWidth < 600) $("mb-pos").textContent = t;
   }).observe($("msg"), { childList: true, characterData: true, subtree: true });
-  $("b-buy").onclick = () => placeMarket(1, +$("qty").value, "成行");
-  $("b-sell").onclick = () => placeMarket(-1, +$("qty").value, "成行");
+  $("b-buy").onclick = () => placeMarket(1, orderQty(), "成行");
+  $("b-sell").onclick = () => placeMarket(-1, orderQty(), "成行");
+  $("b-max").onclick = () => {
+    const side = G.pos < 0 ? -1 : 1;
+    $("qty").value = Math.max(100, maxQty(side, curPrice()));
+    render();
+  };
+  $("s-max").checked = !!storage("dt-maxmode");
+  $("s-max").onchange = () => { storage("dt-maxmode", $("s-max").checked); $("qty").disabled = $("b-max").disabled = $("s-max").checked; if (G) render(); };
+  $("qty").disabled = $("b-max").disabled = $("s-max").checked;
   $("b-flat").onclick = () => { if (G.pos) placeMarket(-Math.sign(G.pos), Math.abs(G.pos), "全決済"); };
   $("b-step").onclick = () => step(1);
   $("b-step5").onclick = () => step(5);
@@ -1210,6 +1245,7 @@ function bind() {
     else if (k === "b") $("b-buy").click();
     else if (k === "s") $("b-sell").click();
     else if (k === "c") $("b-flat").click();
+    else if (k === "m") $("b-max").click();
     else if (k === "n") $("b-new").click();
     else if (k === "+" || k === "=") zoom(1 / 1.4);
     else if (k === "-") zoom(1.4);
