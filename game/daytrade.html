@@ -506,6 +506,7 @@ function placeMarket(side, qty, reason) {
     return;
   }
   revealBar({ side, qty, reason });
+  completeBar();
   $("msg").textContent = "";
   afterStep();
 }
@@ -515,8 +516,16 @@ function step(n = 1) {
   for (let k = 0; k < n; k++) {
     if (G.idx >= S.bars.length) { finish(); return; }
     revealBar(null);
+    completeBar();
   }
   afterStep();
+}
+
+// 選んだ足種 (3 分足・5 分足) の 1 本が揃うまで 1 分足を進める。
+// 損切り・利確は 1 分足ごとに判定するので、足の途中で約定しうる。
+function completeBar() {
+  const key = (t) => Math.floor(mins(t) / CH.tf);
+  while (G.idx > 0 && G.idx < S.bars.length && key(S.bars[G.idx - 1][0]) === key(S.bars[G.idx][0])) revealBar(null);
 }
 
 function finish() {
