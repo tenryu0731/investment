@@ -950,7 +950,8 @@ function drawChart() {
 
   const { bars, ind, prevLen, today } = series();
   const total = bars.length;
-  const n = Math.max(10, Math.round(CH.view));
+  // 足が少ない (5 分足・15 分足や前日なし) ときに細くなりすぎないよう、1 日分を上限にする
+  const n = Math.max(10, Math.round(Math.min(CH.view, viewCap(total))));
   CH.offset = Math.max(0, Math.min(CH.offset, total - Math.min(n, total)));
   const end = total - Math.round(CH.offset), start = Math.max(0, end - n);
   const vis = bars.slice(start, end);
@@ -1171,8 +1172,10 @@ function renderLegend() {
 }
 
 // ---- 拡大・縮小・スクロール ---------------------------------------------------
+function viewCap(total) { return Math.max(total, Math.ceil(330 / tfNow())) + 6; }
 function zoom(factor) {
   const total = drawChart.geom ? drawChart.geom.total : 400;
+  CH.view = Math.min(CH.view, viewCap(total));
   CH.view = Math.max(15, Math.min(Math.max(60, total + 6), CH.view * factor));
   saveChart(); drawChart();
 }
