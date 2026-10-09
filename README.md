@@ -17,10 +17,21 @@ python -m invest jq master                              # J-Quants: 上場銘柄
 python -m invest jq bars 7203 --start 2026-01-01        # J-Quants: 日足
 python -m invest jq fins 7203                           # J-Quants: 財務情報
 python -m invest edinet docs 2026-10-06                  # EDINET: 書類一覧 (提出日指定)
+python -m invest yf bars 7203                           # Yahoo: 1 分足 (直近 30 日。定期実行で溜める)
 python -m invest status                                 # キャッシュの状態
 ```
 
 `--refresh` を付けると、キャッシュを無視して取り直す。
+
+## デイトレ練習ゲーム
+
+```sh
+python -m invest yf export 7203 6758 9984 --out data/daytrade.json   # 1 分足と日足を取得して書き出す
+python game/build.py data/daytrade.json data/daytrade.html          # データ埋め込み版を作る
+```
+
+`data/daytrade.html` をブラウザで開く。`game/daytrade.html` を直接開いた場合は JSON を選んで読み込む。
+Yahoo の 1 分足は 9:00〜9:04 と大引けの板寄せが欠けるため、寄り値・引け値は日足で補う。
 
 ## 再取得しない仕組み
 
@@ -48,6 +59,10 @@ invest/
     jquants.py       J-Quants
     boj.py           日本銀行
     edinet.py        EDINET (書類一覧)
+    yahoo.py         Yahoo Finance (日中足)
+game/
+  daytrade.html      分足リプレイのデイトレ練習ゲーム
+  build.py           データを埋め込んだ 1 ファイル版を作る
 ```
 
 ## 新しいデータ源の追加

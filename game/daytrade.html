@@ -1,0 +1,728 @@
+<title>分足リプレイ道場</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* Layout: 端末型。左にチャート、右に建玉と発注、下に約定履歴。狭い画面では縦に積む。 */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --line: #d3d9e0;
+  --fg: #17202b;
+  --muted: #5a6675;
+  --accent: #a96a00;      /* VWAP・強調 (琥珀) */
+  --up: #c7322b;          /* 陽線 (赤) */
+  --down: #1f5fbf;        /* 陰線 (青) */
+  --gain: #c7322b;
+  --loss: #1f5fbf;
+  --grid: #e3e8ee;
+  --btn: #e6eaef;
+  --on-trade: #ffffff;    /* 売買ボタンの文字 */
+  --font-display: "Dela Gothic One", "Hiragino Kaku Gothic StdN", sans-serif;
+  --font-body: "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141b; --panel: #151d27; --line: #283444; --fg: #e4e9ef; --muted: #93a0b0;
+    --accent: #f0b43c; --up: #ff6b5e; --down: #5ea0ff; --gain: #ff6b5e; --loss: #5ea0ff;
+    --grid: #1d2733; --btn: #222d3a; --on-trade: #0e141b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141b; --panel: #151d27; --line: #283444; --fg: #e4e9ef; --muted: #93a0b0;
+  --accent: #f0b43c; --up: #ff6b5e; --down: #5ea0ff; --gain: #ff6b5e; --loss: #5ea0ff;
+  --grid: #1d2733; --btn: #222d3a; --on-trade: #0e141b; color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 12px 24px; display: grid; gap: 12px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: 22px; margin: 0; letter-spacing: .02em; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: 13px; }
+.meta b { color: var(--fg); font-weight: 500; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.clock { font-family: var(--font-num); font-size: 20px; color: var(--fg); }
+.phase { font-size: 12px; padding: 2px 8px; border-radius: 3px; background: var(--btn); color: var(--fg); letter-spacing: .08em; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; }
+@media (max-width: 860px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.left { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.chartbox { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; position: relative; min-width: 0; }
+canvas#chart { display: block; width: 100%; height: 480px; touch-action: none; }
+@media (max-width: 600px) { canvas#chart { height: 360px; } }
+.hover { position: absolute; left: 8px; top: 6px; font-family: var(--font-num); font-size: 12px; color: var(--muted); pointer-events: none; white-space: nowrap; }
+.legend { position: absolute; right: 64px; top: 6px; font-size: 11px; color: var(--muted); display: flex; gap: 10px; pointer-events: none; }
+.legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 4px; }
+.side { display: grid; gap: 12px; align-content: start; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px; display: grid; gap: 10px; }
+.card h2 { margin: 0; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: .1em; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.big { font-family: var(--font-num); font-size: 26px; font-weight: 600; text-align: right; }
+.gain { color: var(--gain); } .loss { color: var(--loss); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button, select, input { font: inherit; color: var(--fg); }
+button { background: var(--btn); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--muted); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.trade { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.trade button { padding: 12px 8px; font-weight: 700; font-size: 15px; }
+.buy { background: var(--up); color: var(--on-trade); border-color: transparent; }
+.sell { background: var(--down); color: var(--on-trade); border-color: transparent; }
+.flat { grid-column: 1 / -1; }
+kbd { font-family: var(--font-num); font-size: 11px; opacity: .75; font-weight: 400; margin-left: 4px; }
+label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+input[type=number], select { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; width: 100%; box-sizing: border-box; font-family: var(--font-num); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.controls .sp { flex: 1; }
+.controls select { width: auto; }
+.msg { font-size: 12px; color: var(--muted); min-height: 1.4em; }
+.tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+td:first-child, th:first-child { text-align: left; }
+td { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.empty { color: var(--muted); text-align: center; font-family: var(--font-body); }
+dialog { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; max-width: min(560px, calc(100vw - 32px)); width: 100%; padding: 20px; box-sizing: border-box; }
+dialog::backdrop { background: rgba(10, 14, 20, .55); }
+dialog h3 { font-family: var(--font-display); font-weight: 400; font-size: 20px; margin: 0 0 4px; }
+.result-big { font-family: var(--font-num); font-size: 36px; font-weight: 600; margin: 8px 0; }
+.note { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.loader { background: var(--panel); border: 1px dashed var(--line); border-radius: 4px; padding: 24px; display: grid; gap: 10px; }
+details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>分足リプレイ道場</h1>
+    <div class="meta">
+      <span>銘柄 <b id="m-name">—</b></span>
+      <span>日付 <b id="m-date">—</b></span>
+      <span>前日終値 <b id="m-prev" class="num">—</b></span>
+      <span>呼値 <b id="m-tick" class="num">—</b></span>
+    </div>
+    <span class="sp" style="flex:1"></span>
+    <span class="phase" id="m-phase">寄り前</span>
+    <span class="clock" id="m-clock">08:59</span>
+  </header>
+
+  <div class="loader" id="loader" hidden>
+    <b>データがありません</b>
+    <div class="note">リポジトリで <code>python -m invest yf export 7203 6758 --out data/daytrade.json</code> を実行し、できた JSON を選んでください。</div>
+    <input type="file" id="file" accept=".json,application/json">
+  </div>
+
+  <div class="main" id="game">
+    <div class="left">
+    <div class="chartbox">
+      <canvas id="chart"></canvas>
+      <div class="hover" id="hover"></div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>VWAP</span><span><i style="background:var(--muted)"></i>前日終値</span></div>
+    </div>
+    <div class="controls" id="controls">
+      <button id="b-step">次の足<kbd>→</kbd></button>
+      <button id="b-step5">5 本</button>
+      <button id="b-play">再生<kbd>Space</kbd></button>
+      <select id="speed" aria-label="再生速度">
+        <option value="1000">1 秒/本</option>
+        <option value="500" selected>0.5 秒/本</option>
+        <option value="250">0.25 秒/本</option>
+        <option value="100">0.1 秒/本</option>
+      </select>
+      <span class="sp"></span>
+      <select id="pick" aria-label="セッションを選ぶ"></select>
+      <button id="b-new">新しい日<kbd>N</kbd></button>
+    </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h2>損益</h2>
+        <div class="big" id="pnl">0</div>
+        <dl class="kv">
+          <dt>建玉</dt><dd id="pos">なし</dd>
+          <dt>平均単価</dt><dd id="avg">—</dd>
+          <dt>評価損益</dt><dd id="unreal">0</dd>
+          <dt>確定損益</dt><dd id="real">0</dd>
+          <dt>現在値</dt><dd id="last">—</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <h2>発注 (成行: 次の足の始値で約定)</h2>
+        <label for="qty">数量 (株)
+          <input type="number" id="qty" min="100" step="100" value="100">
+        </label>
+        <div class="trade">
+          <button class="buy" id="b-buy">買い<kbd>B</kbd></button>
+          <button class="sell" id="b-sell">売り<kbd>S</kbd></button>
+          <button class="flat" id="b-flat">全決済<kbd>C</kbd></button>
+        </div>
+        <div class="grid2">
+          <label for="stop">損切り (逆指値)
+            <input type="number" id="stop" step="any" placeholder="なし">
+          </label>
+          <label for="tp">利確 (指値)
+            <input type="number" id="tp" step="any" placeholder="なし">
+          </label>
+        </div>
+        <div class="msg" id="msg"></div>
+      </div>
+
+      <div class="card">
+        <h2>設定</h2>
+        <div class="grid2">
+          <label for="s-slip">滑り (呼値何個分)
+            <select id="s-slip"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select>
+          </label>
+          <label for="s-fee">手数料 (円/約定)
+            <input type="number" id="s-fee" min="0" step="1" value="0">
+          </label>
+          <label for="s-autostop">自動損切り (%)
+            <input type="number" id="s-autostop" min="0" step="0.1" value="0.5">
+          </label>
+          <label for="s-autotp">自動利確 (%)
+            <input type="number" id="s-autotp" min="0" step="0.1" value="0">
+          </label>
+          <label for="s-cap">資金 (円)
+            <input type="number" id="s-cap" min="100000" step="100000" value="3000000">
+          </label>
+          <label for="s-blind">銘柄・日付
+            <select id="s-blind"><option value="1" selected>伏せる</option><option value="0">表示</option></select>
+          </label>
+        </div>
+        <div class="note">建玉の上限は資金の 3.3 倍 (信用取引の目安)。自動損切り・利確は建玉の平均単価から設定し、0 で無効。</div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>時刻</th><th>売買</th><th>数量</th><th>価格</th><th>損益</th><th>理由</th></tr></thead>
+      <tbody id="fills"><tr><td colspan="6" class="empty">まだ約定はありません</td></tr></tbody>
+    </table>
+  </div>
+
+  <details>
+    <summary>これまでの成績</summary>
+    <div class="tablewrap" style="margin-top:8px">
+      <table>
+        <thead><tr><th>銘柄</th><th>日付</th><th>損益</th><th>回数</th><th>勝率</th><th>累計</th></tr></thead>
+        <tbody id="hist"></tbody>
+      </table>
+    </div>
+  </details>
+
+  <div class="note">
+    データ: Yahoo Finance の 1 分足。9:00〜9:04 の足と大引けの板寄せは元データにないため、寄り値と引け値は日足の値を使う
+    (9:00 前の成行は寄り値、引けまでの建玉は引け値で精算)。板と歩み値はない。
+  </div>
+</div>
+
+<dialog id="result">
+  <h3 id="r-title">大引け</h3>
+  <div class="note" id="r-sub"></div>
+  <div class="result-big" id="r-pnl">0</div>
+  <dl class="kv" id="r-kv"></dl>
+  <div class="row" style="margin-top:16px; justify-content:flex-end">
+    <button id="r-close">チャートを見る</button>
+    <button id="r-next" class="buy">次の日へ</button>
+  </div>
+</dialog>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+"use strict";
+const JP_NAMES = {
+  "7203": "トヨタ自動車", "6758": "ソニーグループ", "9984": "ソフトバンクグループ", "8306": "三菱UFJ FG",
+  "8035": "東京エレクトロン", "7011": "三菱重工業", "6920": "レーザーテック", "6526": "ソシオネクスト",
+  "6857": "アドバンテスト", "7974": "任天堂", "9432": "NTT", "6501": "日立製作所", "8058": "三菱商事",
+  "9983": "ファーストリテイリング", "4063": "信越化学工業", "6098": "リクルートHD", "8316": "三井住友FG",
+};
+const LEVERAGE = 3.3;
+const $ = (id) => document.getElementById(id);
+
+let DATA = null;
+try { const t = $("data").textContent.trim(); if (t && !t.startsWith("__")) DATA = JSON.parse(t); } catch (e) { DATA = null; }
+
+// ---- 状態 ---------------------------------------------------------------
+let S = null;        // 現在のセッション
+let prevS = null;    // 同じ銘柄の前営業日
+let G = null;        // ゲーム状態
+let timer = null;
+let viewBars = 140;  // 表示本数
+let hoverIdx = null;
+
+function nameOf(s) { return JP_NAMES[s.code] || s.name || s.code; }
+function fmt(n, d = 0) { return n == null || isNaN(n) ? "—" : n.toLocaleString("ja-JP", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function fmtP(p) { return fmt(p, G && G.tick < 1 ? 1 : 0); }
+function signed(n) { return (n > 0 ? "+" : "") + fmt(Math.round(n)); }
+function cls(el, n) { el.classList.toggle("gain", n > 0); el.classList.toggle("loss", n < 0); }
+
+function inferTick(s) {
+  const ps = new Set();
+  for (const b of s.bars) for (let k = 1; k <= 4; k++) ps.add(b[k]);
+  const arr = [...ps].sort((a, b) => a - b);
+  let m = Infinity;
+  for (let i = 1; i < arr.length; i++) { const d = arr[i] - arr[i - 1]; if (d > 1e-9 && d < m) m = d; }
+  const steps = [0.1, 0.5, 1, 5, 10, 50, 100];
+  return steps.find((x) => m < x * 1.5) || 100;
+}
+const roundTick = (p, t) => Math.round(p / t) * t;
+
+function storage(key, val) {
+  try {
+    if (val === undefined) return JSON.parse(localStorage.getItem(key) || "null");
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch (e) { return null; }
+}
+
+// ---- セッション選択 ---------------------------------------------------------
+function playable() { return DATA.sessions.map((s, i) => i).filter((i) => DATA.sessions[i].bars.length >= 100); }
+
+function fillPicker() {
+  const sel = $("pick");
+  sel.innerHTML = '<option value="">ランダム</option>';
+  for (const i of playable()) {
+    const s = DATA.sessions[i];
+    const o = document.createElement("option");
+    o.value = i; o.textContent = `${s.code} ${nameOf(s)} ${s.date}`;
+    sel.appendChild(o);
+  }
+}
+
+function startSession(i) {
+  stop();
+  if (i == null) { const list = playable(); i = list[Math.floor(Math.random() * list.length)]; }
+  S = DATA.sessions[i];
+  prevS = DATA.sessions.filter((x) => x.code === S.code && x.date < S.date).pop() || null;
+  const tick = inferTick(S);
+  const cap = Math.max(100000, +$("s-cap").value || 3000000);
+  const first = S.open ?? S.bars[0][1];
+  G = {
+    idx: 0, tick, cap, pos: 0, avg: 0, realized: 0, fees: 0, stop: null, tp: null,
+    fills: [], marks: [], equity: [0], closedTrades: [], done: false, sessionIndex: i,
+  };
+  $("qty").value = Math.max(100, Math.floor(cap / first / 100) * 100);
+  $("stop").value = ""; $("tp").value = "";
+  $("msg").textContent = "寄り前。成行注文は寄り値で約定します。";
+  updateHeader(); render();
+}
+
+function updateHeader() {
+  const blind = $("s-blind").value === "1" && !G.done;
+  $("m-name").textContent = blind ? "？？？？" : `${S.code} ${nameOf(S)}`;
+  $("m-date").textContent = blind ? "？？？？" : S.date;
+  $("m-prev").textContent = fmtP(S.prev_close);
+  $("m-tick").textContent = G.tick < 1 ? G.tick.toFixed(1) : String(G.tick);
+}
+
+// ---- 約定処理 ---------------------------------------------------------------
+function curPrice() { return G.idx === 0 ? (S.prev_close ?? S.bars[0][1]) : S.bars[G.idx - 1][4]; }
+function clockText() {
+  if (G.done) return "15:30";
+  if (G.idx === 0) return "08:59";
+  return S.bars[G.idx - 1][0];
+}
+
+function fill(side, qty, price, reason, barIdx) {
+  const fee = +$("s-fee").value || 0;
+  G.fees += fee; G.realized -= fee;
+  let pnl = null;
+  if (G.pos === 0 || Math.sign(G.pos) === side) {
+    G.avg = (G.avg * Math.abs(G.pos) + price * qty) / (Math.abs(G.pos) + qty);
+    G.pos += side * qty;
+    applyAutoExits();
+  } else {
+    const closeQty = Math.min(qty, Math.abs(G.pos));
+    pnl = (price - G.avg) * closeQty * Math.sign(G.pos);
+    G.realized += pnl;
+    G.closedTrades.push(pnl);
+    G.pos += side * closeQty;
+    const rest = qty - closeQty;
+    if (G.pos === 0) { G.avg = 0; G.stop = G.tp = null; $("stop").value = ""; $("tp").value = ""; }
+    if (rest > 0) { G.pos = side * rest; G.avg = price; applyAutoExits(); }
+  }
+  G.fills.push({ t: barIdx < S.bars.length ? (barIdx < 0 ? "09:00" : S.bars[barIdx][0]) : "15:30", side, qty, price, pnl, reason });
+  G.marks.push({ i: barIdx, side, price });
+}
+
+function applyAutoExits() {
+  const sp = +$("s-autostop").value || 0, tp = +$("s-autotp").value || 0, d = Math.sign(G.pos);
+  if (sp > 0) { G.stop = roundTick(G.avg * (1 - d * sp / 100), G.tick); $("stop").value = G.stop; }
+  if (tp > 0) { G.tp = roundTick(G.avg * (1 + d * tp / 100), G.tick); $("tp").value = G.tp; }
+}
+
+function slip(side) { return side * (+$("s-slip").value || 0) * G.tick; }
+
+// 足 i を開く。発注中の成行はその始値で約定し、そのあと損切り・利確を判定する。
+function revealBar(order) {
+  const i = G.idx;
+  const b = S.bars[i];
+  if (order) {
+    const atOpen = i === 0 && S.open != null;
+    const price = atOpen ? S.open : b[1] + slip(order.side);
+    fill(order.side, order.qty, price, atOpen ? "寄り成" : order.reason, atOpen ? -1 : i);
+  }
+  G.idx++;
+  checkExits(b, i);
+  G.equity.push(G.realized + unrealized());
+}
+
+function checkExits(b, i) {
+  if (G.pos === 0) return;
+  const d = Math.sign(G.pos), q = Math.abs(G.pos), [, o, h, l] = b;
+  if (G.stop != null) {
+    const hit = d > 0 ? l <= G.stop : h >= G.stop;
+    if (hit) {
+      const gapped = d > 0 ? o <= G.stop : o >= G.stop;
+      fill(-d, q, (gapped ? o : G.stop) + slip(-d), "損切り", i);
+      return;
+    }
+  }
+  if (G.tp != null) {
+    const hit = d > 0 ? h >= G.tp : l <= G.tp;
+    if (hit) {
+      const gapped = d > 0 ? o >= G.tp : o <= G.tp;
+      fill(-d, q, gapped ? o : G.tp, "利確", i);
+    }
+  }
+}
+
+function unrealized() { return G.pos === 0 ? 0 : (curPrice() - G.avg) * G.pos; }
+
+function placeMarket(side, qty, reason) {
+  if (G.done) return;
+  if (G.idx >= S.bars.length) { $("msg").textContent = "ザラ場は終わりました。次へで大引け精算します。"; return; }
+  qty = Math.floor(qty / 100) * 100;
+  if (qty < 100) { $("msg").textContent = "数量は 100 株単位で入力してください。"; return; }
+  const after = G.pos + side * qty;
+  const px = G.idx === 0 && S.open != null ? S.open : S.bars[G.idx][1];
+  if (Math.abs(after) > Math.abs(G.pos) && Math.abs(after) * px > G.cap * LEVERAGE) {
+    $("msg").textContent = `建玉が上限 (${fmt(G.cap * LEVERAGE)} 円) を超えます。数量を減らしてください。`;
+    return;
+  }
+  revealBar({ side, qty, reason });
+  $("msg").textContent = "";
+  afterStep();
+}
+
+function step(n = 1) {
+  if (G.done) return;
+  for (let k = 0; k < n; k++) {
+    if (G.idx >= S.bars.length) { finish(); return; }
+    revealBar(null);
+  }
+  afterStep();
+}
+
+function finish() {
+  stop();
+  if (G.pos !== 0) {
+    const close = S.close ?? S.bars[S.bars.length - 1][4];
+    fill(-Math.sign(G.pos), Math.abs(G.pos), close, "大引け", S.bars.length);
+  }
+  G.done = true;
+  G.equity.push(G.realized);
+  updateHeader(); render(); showResult();
+}
+
+function afterStep() {
+  syncExitsFromInputs();
+  render();
+  if (G.idx >= S.bars.length && timer) { stop(); }
+}
+
+function syncExitsFromInputs() {
+  const st = parseFloat($("stop").value), tp = parseFloat($("tp").value);
+  G.stop = isFinite(st) && G.pos !== 0 ? st : null;
+  G.tp = isFinite(tp) && G.pos !== 0 ? tp : null;
+}
+
+// ---- 再生 -----------------------------------------------------------------
+function play() {
+  if (G.done) return;
+  if (timer) { stop(); return; }
+  $("b-play").firstChild.textContent = "停止";
+  const tick = () => {
+    if (G.idx >= S.bars.length) { stop(); $("msg").textContent = "15:24 まで来ました。次へで大引け精算します。"; return; }
+    step(1);
+    timer = setTimeout(tick, +$("speed").value);
+  };
+  timer = setTimeout(tick, +$("speed").value);
+}
+function stop() { if (timer) clearTimeout(timer); timer = null; $("b-play").firstChild.textContent = "再生"; }
+
+// ---- 結果 -----------------------------------------------------------------
+function stats() {
+  const t = G.closedTrades, wins = t.filter((x) => x > 0), losses = t.filter((x) => x <= 0);
+  let peak = 0, mdd = 0;
+  for (const e of G.equity) { peak = Math.max(peak, e); mdd = Math.min(mdd, e - peak); }
+  const gw = wins.reduce((a, b) => a + b, 0), gl = -losses.reduce((a, b) => a + b, 0);
+  return {
+    n: t.length, win: t.length ? wins.length / t.length : null,
+    avgW: wins.length ? gw / wins.length : null, avgL: losses.length ? -gl / losses.length : null,
+    pf: gl > 0 ? gw / gl : (gw > 0 ? Infinity : null), mdd,
+  };
+}
+
+function showResult() {
+  const st = stats(), pnl = G.realized;
+  const open = S.open ?? S.bars[0][1], close = S.close ?? S.bars[S.bars.length - 1][4];
+  $("r-title").textContent = `大引け ${S.code} ${nameOf(S)}`;
+  $("r-sub").textContent = `${S.date}  寄り ${fmtP(open)} → 引け ${fmtP(close)} (${((close / open - 1) * 100).toFixed(2)}%)`;
+  const el = $("r-pnl"); el.textContent = signed(pnl) + " 円"; cls(el, pnl);
+  const rows = [
+    ["資金比", ((pnl / G.cap) * 100).toFixed(2) + "%"],
+    ["決済回数", st.n],
+    ["勝率", st.win == null ? "—" : (st.win * 100).toFixed(0) + "%"],
+    ["平均利益", st.avgW == null ? "—" : signed(st.avgW)],
+    ["平均損失", st.avgL == null ? "—" : signed(st.avgL)],
+    ["プロフィットファクター", st.pf == null ? "—" : st.pf === Infinity ? "∞" : st.pf.toFixed(2)],
+    ["最大ドローダウン", signed(st.mdd)],
+    ["手数料", fmt(G.fees)],
+  ];
+  $("r-kv").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  const hist = storage("dt-history") || [];
+  hist.push({ code: S.code, name: nameOf(S), date: S.date, pnl: Math.round(pnl), n: st.n, win: st.win });
+  storage("dt-history", hist.slice(-200));
+  renderHistory();
+  try { $("result").showModal(); } catch (e) { $("result").setAttribute("open", ""); }
+}
+
+function renderHistory() {
+  const hist = storage("dt-history") || [];
+  let cum = 0;
+  const rows = hist.map((h) => { cum += h.pnl; return { ...h, cum }; }).reverse();
+  $("hist").innerHTML = rows.length ? rows.map((h) =>
+    `<tr><td>${h.code} ${h.name}</td><td>${h.date}</td><td class="${h.pnl > 0 ? "gain" : h.pnl < 0 ? "loss" : ""}">${signed(h.pnl)}</td><td>${h.n}</td><td>${h.win == null ? "—" : Math.round(h.win * 100) + "%"}</td><td class="${h.cum > 0 ? "gain" : h.cum < 0 ? "loss" : ""}">${signed(h.cum)}</td></tr>`
+  ).join("") : '<tr><td colspan="6" class="empty">まだ記録はありません</td></tr>';
+}
+
+// ---- 描画 -----------------------------------------------------------------
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function render() {
+  const u = unrealized(), total = G.realized + u, last = curPrice();
+  const pe = $("pnl"); pe.textContent = signed(total); cls(pe, total);
+  $("pos").textContent = G.pos === 0 ? "なし" : `${G.pos > 0 ? "買" : "売"} ${fmt(Math.abs(G.pos))} 株`;
+  $("avg").textContent = G.pos === 0 ? "—" : fmtP(G.avg);
+  const ue = $("unreal"); ue.textContent = signed(u); cls(ue, u);
+  const re = $("real"); re.textContent = signed(G.realized); cls(re, G.realized);
+  const chg = S.prev_close ? ((last / S.prev_close - 1) * 100).toFixed(2) : null;
+  $("last").textContent = `${fmtP(last)}${chg != null ? ` (${chg > 0 ? "+" : ""}${chg}%)` : ""}`;
+  $("m-clock").textContent = clockText();
+  const t = clockText();
+  $("m-phase").textContent = G.done ? "大引け" : G.idx === 0 ? "寄り前" : t < "11:30" ? "前場" : "後場";
+  const ended = G.done || G.idx >= S.bars.length;
+  for (const id of ["b-buy", "b-sell"]) $(id).disabled = ended;
+  $("b-flat").disabled = ended || G.pos === 0;
+  $("b-step").disabled = $("b-step5").disabled = $("b-play").disabled = G.done;
+  $("b-step").firstChild.textContent = G.idx >= S.bars.length && !G.done ? "大引け精算" : "次の足";
+  renderFills();
+  drawChart();
+}
+
+function renderFills() {
+  const tb = $("fills");
+  if (!G.fills.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">まだ約定はありません</td></tr>'; return; }
+  tb.innerHTML = G.fills.slice().reverse().map((f) =>
+    `<tr><td>${f.t}</td><td class="${f.side > 0 ? "gain" : "loss"}">${f.side > 0 ? "買" : "売"}</td><td>${fmt(f.qty)}</td><td>${fmtP(f.price)}</td><td class="${f.pnl > 0 ? "gain" : f.pnl < 0 ? "loss" : ""}">${f.pnl == null ? "" : signed(f.pnl)}</td><td>${f.reason}</td></tr>`
+  ).join("");
+}
+
+function drawChart() {
+  const cv = $("chart"), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, W, H);
+  const col = { fg: css("--fg"), muted: css("--muted"), grid: css("--grid"), up: css("--up"), down: css("--down"), accent: css("--accent"), line: css("--line") };
+
+  // 表示する足: 前日 (薄く) + 当日の公開済み分
+  const prevBars = prevS ? prevS.bars : [];
+  const all = prevBars.map((b) => ({ b, prev: true })).concat(S.bars.slice(0, G.idx).map((b, i) => ({ b, prev: false, i })));
+  const n = Math.min(viewBars, Math.max(all.length, 1));
+  const vis = all.slice(Math.max(0, all.length - n));
+  const padR = 64, padB = 22, padT = 24, volH = Math.round((H - padB - padT) * 0.18);
+  const plotW = W - padR - 8, priceH = H - padB - padT - volH - 6;
+  const slots = Math.max(n + 8, 40), bw = plotW / slots;
+  const x = (k) => 8 + k * bw + bw / 2;
+
+  // VWAP (当日分のみ)
+  const vw = [];
+  for (let i = 0, pv = 0, vv = 0; i < G.idx; i++) {
+    const b = S.bars[i], tp = (b[2] + b[3] + b[4]) / 3;
+    pv += tp * b[5]; vv += b[5]; vw.push(vv > 0 ? pv / vv : tp);
+  }
+  const vwap = vis.map((it) => (it.prev ? null : vw[it.i]));
+
+  let lo = Infinity, hi = -Infinity, vmax = 1;
+  for (const it of vis) { lo = Math.min(lo, it.b[3]); hi = Math.max(hi, it.b[2]); vmax = Math.max(vmax, it.b[5]); }
+  const refs = [S.prev_close, G.pos ? G.avg : null, G.stop, G.tp, G.idx === 0 ? S.open : null].filter((v) => v != null);
+  for (const r of refs) { lo = Math.min(lo, r); hi = Math.max(hi, r); }
+  if (!isFinite(lo)) { lo = S.prev_close * 0.99; hi = S.prev_close * 1.01; }
+  const padP = (hi - lo) * 0.08 || hi * 0.005; lo -= padP; hi += padP;
+  const y = (p) => padT + (hi - p) / (hi - lo) * priceH;
+
+  // グリッドと価格軸
+  c.font = `11px ${css("--font-num")}`; c.textBaseline = "middle";
+  const rawStep = (hi - lo) / 6, mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const stepP = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= rawStep);
+  for (let p = Math.ceil(lo / stepP) * stepP; p <= hi; p += stepP) {
+    c.strokeStyle = col.grid; c.lineWidth = 1; c.beginPath(); c.moveTo(8, Math.round(y(p)) + .5); c.lineTo(8 + plotW, Math.round(y(p)) + .5); c.stroke();
+    c.fillStyle = col.muted; c.textAlign = "left"; c.fillText(fmt(p, stepP < 1 ? 1 : 0), 8 + plotW + 6, y(p));
+  }
+
+  // 時刻ラベル・前場/後場/前日の区切り
+  c.textAlign = "center"; c.textBaseline = "alphabetic";
+  vis.forEach((it, j) => {
+    const t = it.b[0], pt = j > 0 ? vis[j - 1] : null;
+    const newDay = pt && pt.prev && !it.prev;
+    const lunch = pt && !it.prev && !pt.prev && pt.b[0] < "12:00" && t >= "12:00";
+    if (newDay || lunch) {
+      c.strokeStyle = col.line; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(x(j) - bw / 2, padT); c.lineTo(x(j) - bw / 2, H - padB); c.stroke(); c.setLineDash([]);
+      c.fillStyle = col.muted; c.textAlign = "left"; c.fillText(newDay ? "当日" : "後場", x(j) - bw / 2 + 4, padT - 8); c.textAlign = "center";
+    }
+    if (t.endsWith(":00") || t.endsWith(":30")) { c.fillStyle = col.muted; c.fillText(t, x(j), H - 6); }
+  });
+  if (vis.length && vis[0].prev) { c.fillStyle = col.muted; c.textAlign = "left"; c.fillText("前日", 12, padT - 8); }
+
+  // 出来高
+  const vBase = H - padB;
+  vis.forEach((it, j) => {
+    const b = it.b, h = b[5] / vmax * volH;
+    c.globalAlpha = it.prev ? 0.25 : 0.5;
+    c.fillStyle = b[4] >= b[1] ? col.up : col.down;
+    c.fillRect(x(j) - bw * 0.35, vBase - h, Math.max(1, bw * 0.7), h);
+  });
+  c.globalAlpha = 1;
+
+  // 基準線
+  const hline = (p, color, dash, label) => {
+    if (p == null) return;
+    const yy = Math.round(y(p)) + .5;
+    c.strokeStyle = color; c.setLineDash(dash); c.lineWidth = 1; c.beginPath(); c.moveTo(8, yy); c.lineTo(8 + plotW, yy); c.stroke(); c.setLineDash([]);
+    if (label) {
+      c.font = `11px ${css("--font-body")}`; const w = c.measureText(label).width + 8;
+      c.fillStyle = color; c.fillRect(8 + plotW - w, yy - 15, w, 14);
+      c.fillStyle = css("--panel"); c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(label, 8 + plotW - w + 4, yy - 8); c.textBaseline = "alphabetic";
+      c.font = `11px ${css("--font-num")}`;
+    }
+  };
+  hline(S.prev_close, col.muted, [4, 4]);
+  if (G.pos) hline(G.avg, col.fg, [2, 2], `建値 ${fmtP(G.avg)}`);
+  if (G.stop != null) hline(G.stop, col.down, [6, 3], `損切り ${fmtP(G.stop)}`);
+  if (G.tp != null) hline(G.tp, col.up, [6, 3], `利確 ${fmtP(G.tp)}`);
+  if (G.idx === 0 && S.open != null) hline(S.open, col.accent, [1, 3], `寄り値 ${fmtP(S.open)}`);
+
+  // ローソク足
+  vis.forEach((it, j) => {
+    const [, o, h, l, cl] = it.b, upBar = cl >= o;
+    c.globalAlpha = it.prev ? 0.35 : 1;
+    c.strokeStyle = c.fillStyle = upBar ? col.up : col.down;
+    const xx = Math.round(x(j)) + .5;
+    c.beginPath(); c.moveTo(xx, y(h)); c.lineTo(xx, y(l)); c.stroke();
+    const top = y(Math.max(o, cl)), bh = Math.max(1, Math.abs(y(o) - y(cl))), w = Math.max(1, bw * 0.7);
+    c.fillRect(x(j) - w / 2, top, w, bh);
+  });
+  c.globalAlpha = 1;
+
+  // VWAP
+  c.strokeStyle = col.accent; c.lineWidth = 1.5; c.beginPath(); let started = false;
+  vwap.forEach((v, j) => { if (v == null) return; if (!started) { c.moveTo(x(j), y(v)); started = true; } else c.lineTo(x(j), y(v)); });
+  c.stroke(); c.lineWidth = 1;
+
+  // 約定マーク
+  const off = all.length - vis.length, pn = prevBars.length;
+  for (const m of G.marks) {
+    const k = (m.i < 0 ? 0 : Math.min(m.i, G.idx - 1)) + pn - off;
+    if (k < 0 || k >= vis.length) continue;
+    const xx = x(k), yy = y(m.price), s = 6;
+    c.fillStyle = m.side > 0 ? col.up : col.down; c.strokeStyle = css("--panel");
+    c.beginPath();
+    if (m.side > 0) { c.moveTo(xx, yy); c.lineTo(xx - s, yy + s * 1.6); c.lineTo(xx + s, yy + s * 1.6); }
+    else { c.moveTo(xx, yy); c.lineTo(xx - s, yy - s * 1.6); c.lineTo(xx + s, yy - s * 1.6); }
+    c.closePath(); c.fill(); c.stroke();
+  }
+
+  // 現在値ラベル
+  if (G.idx > 0 && !G.done) {
+    const p = curPrice(), yy = y(p);
+    c.fillStyle = col.fg; c.fillRect(8 + plotW + 2, yy - 8, padR - 4, 16);
+    c.fillStyle = css("--panel"); c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(fmtP(p), 8 + plotW + 6, yy); c.textBaseline = "alphabetic";
+  }
+
+  // ホバー
+  const hv = $("hover");
+  if (hoverIdx != null && hoverIdx < vis.length) {
+    const it = vis[hoverIdx], [t, o, h, l, cl, v] = it.b;
+    hv.textContent = `${it.prev ? "前日 " : ""}${t}  始${fmtP(o)} 高${fmtP(h)} 安${fmtP(l)} 終${fmtP(cl)}  出来高${fmt(v)}${!it.prev && vwap[hoverIdx] ? "  VWAP " + fmt(vwap[hoverIdx], 1) : ""}`;
+    c.strokeStyle = col.muted; c.globalAlpha = .5; c.beginPath(); c.moveTo(Math.round(x(hoverIdx)) + .5, padT); c.lineTo(Math.round(x(hoverIdx)) + .5, H - padB); c.stroke(); c.globalAlpha = 1;
+  } else {
+    hv.textContent = G.idx === 0 ? `寄り前  前日終値 ${fmtP(S.prev_close)}${S.open != null ? `  寄り値 ${fmtP(S.open)} (${(((S.open / S.prev_close) - 1) * 100).toFixed(2)}%)` : ""}` : "";
+  }
+  drawChart.geom = { bw, n: vis.length };
+}
+
+// ---- 入力 -----------------------------------------------------------------
+function bind() {
+  $("b-buy").onclick = () => placeMarket(1, +$("qty").value, "成行");
+  $("b-sell").onclick = () => placeMarket(-1, +$("qty").value, "成行");
+  $("b-flat").onclick = () => { if (G.pos) placeMarket(-Math.sign(G.pos), Math.abs(G.pos), "全決済"); };
+  $("b-step").onclick = () => step(1);
+  $("b-step5").onclick = () => step(5);
+  $("b-play").onclick = play;
+  $("b-new").onclick = () => { $("pick").value = ""; startSession(null); };
+  $("pick").onchange = (e) => startSession(e.target.value === "" ? null : +e.target.value);
+  $("r-close").onclick = () => $("result").close();
+  $("r-next").onclick = () => { $("result").close(); startSession(null); };
+  $("s-blind").onchange = updateHeader;
+  for (const id of ["stop", "tp"]) $(id).addEventListener("change", () => { syncExitsFromInputs(); render(); });
+  document.addEventListener("keydown", (e) => {
+    if (!G || e.target.matches("input, select, textarea") || $("result").open) return;
+    const k = e.key.toLowerCase();
+    if (k === "arrowright") { e.preventDefault(); step(1); }
+    else if (k === " ") { e.preventDefault(); play(); }
+    else if (k === "b") $("b-buy").click();
+    else if (k === "s") $("b-sell").click();
+    else if (k === "c") $("b-flat").click();
+    else if (k === "n") $("b-new").click();
+  });
+  const cv = $("chart");
+  cv.addEventListener("pointermove", (e) => {
+    const g = drawChart.geom; if (!g) return;
+    const r = cv.getBoundingClientRect(), k = Math.floor((e.clientX - r.left - 8) / g.bw);
+    hoverIdx = k >= 0 && k < g.n ? k : null; drawChart();
+  });
+  cv.addEventListener("pointerleave", () => { hoverIdx = null; drawChart(); });
+  cv.addEventListener("wheel", (e) => { e.preventDefault(); viewBars = Math.max(30, Math.min(700, Math.round(viewBars * (e.deltaY > 0 ? 1.15 : 0.87)))); drawChart(); }, { passive: false });
+  window.addEventListener("resize", () => G && drawChart());
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => G && drawChart());
+  new MutationObserver(() => G && drawChart()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+}
+
+function boot() {
+  bind(); renderHistory();
+  if (!DATA) {
+    $("loader").hidden = false; $("game").hidden = true;
+    $("file").onchange = async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      try { DATA = JSON.parse(await f.text()); $("loader").hidden = true; $("game").hidden = false; fillPicker(); startSession(null); }
+      catch (err) { $("msg").textContent = "JSON を読めませんでした。export で作ったファイルを選んでください。"; }
+    };
+    return;
+  }
+  fillPicker(); startSession(null);
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => G && drawChart());
+boot();
+</script>
