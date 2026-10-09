@@ -83,6 +83,7 @@ canvas#chart { display: block; width: 100%; height: 480px; touch-action: pan-y; 
 .kv dd { margin: 0; text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .big { font-family: var(--font-num); font-size: 26px; font-weight: 600; text-align: right; }
 .gain { color: var(--gain); } .loss { color: var(--loss); }
+.kv.sep { border-top: 1px solid var(--grid); padding-top: 8px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 button, select, input { font: inherit; color: var(--fg); }
 button { background: var(--btn); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; cursor: pointer; }
@@ -125,7 +126,7 @@ button, summary, select { touch-action: manipulation; }
 @media (max-width: 600px) {
   .pc-only { display: none; }
   .sp-only { display: inline; }
-  .wrap { padding-block: 8px calc(124px + env(safe-area-inset-bottom, 0px)); gap: 10px; }
+  .wrap { padding-block: 8px calc(150px + env(safe-area-inset-bottom, 0px)); gap: 10px; }
   header { gap: 4px 12px; }
   h1 { font-size: 17px; }
   header .phase, header .clock, header .sp { display: none; }
@@ -135,7 +136,7 @@ button, summary, select { touch-action: manipulation; }
   .charttools select, #ind summary, .zoom button { padding: 0 10px; height: 40px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
   .charttools select { display: block; }
   .zoom button { min-width: 38px; }
-  .indgrid { position: fixed; left: 16px; right: 16px; width: auto; top: auto; bottom: calc(132px + env(safe-area-inset-bottom, 0px)); max-height: 55vh; overflow: auto; z-index: 30; }
+  .indgrid { position: fixed; left: 16px; right: 16px; width: auto; top: auto; bottom: calc(158px + env(safe-area-inset-bottom, 0px)); max-height: 55vh; overflow: auto; z-index: 30; }
   .hover { white-space: normal; min-height: 2.8em; font-size: 11px; }
   .legend { font-size: 10px; gap: 4px 8px; }
   #b-step, #b-step5, #b-play, .trade, .pnlcard { display: none; }
@@ -147,9 +148,14 @@ button, summary, select { touch-action: manipulation; }
   .mbar { display: grid; gap: 6px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--panel); border-top: 1px solid var(--line); padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -4px 16px rgba(0, 0, 0, .12); }
   .mstat { display: flex; align-items: baseline; gap: 10px; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); }
   .mb-pnl { font-size: 20px; font-weight: 600; color: var(--fg); }
+  .mb-lbl { font-size: 11px; margin-right: -6px; }
   .mb-pnl.gain { color: var(--gain); }
   .mb-pnl.loss { color: var(--loss); }
-  .mb-pos { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mstat { flex-wrap: wrap; row-gap: 2px; }
+  .mb-acct { flex: 1; min-width: 0; font-size: 11px; line-height: 1.3; }
+  .mb-acct b { color: var(--fg); font-weight: 600; }
+  .mb-acct b.gain { color: var(--gain); } .mb-acct b.loss { color: var(--loss); }
+  .mb-pos { flex: 1 1 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mb-time b { color: var(--fg); font-size: 15px; font-weight: 600; }
   .mbtn { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 52px; gap: 6px; }
   .mbtn button { min-height: 48px; padding: 0 4px; font-weight: 700; font-size: 15px; }
@@ -224,9 +230,14 @@ button, summary, select { touch-action: manipulation; }
 
     <div class="side">
       <div class="card pnlcard">
-        <h2>損益</h2>
-        <div class="big" id="pnl">0</div>
+        <h2>資産</h2>
+        <div class="big" id="equity">0</div>
         <dl class="kv">
+          <dt>本日損益</dt><dd id="pnl">0</dd>
+          <dt>累計損益</dt><dd id="cum">0</dd>
+          <dt>初期資金</dt><dd id="start">—</dd>
+        </dl>
+        <dl class="kv sep">
           <dt>建玉</dt><dd id="pos">なし</dd>
           <dt>平均単価</dt><dd id="avg">—</dd>
           <dt>評価損益</dt><dd id="unreal">0</dd>
@@ -271,14 +282,18 @@ button, summary, select { touch-action: manipulation; }
           <label for="s-autotp">自動利確 (%)
             <input type="number" id="s-autotp" min="0" step="0.1" value="0">
           </label>
-          <label for="s-cap">資金 (円)
+          <label for="s-cap">初期資金 (円)
             <input type="number" id="s-cap" min="100000" step="100000" value="3000000">
           </label>
           <label for="s-blind">銘柄・日付
             <select id="s-blind"><option value="1" selected>伏せる</option><option value="0">表示</option></select>
           </label>
         </div>
-        <div class="note">建玉の上限は資金の 3.3 倍 (信用取引の目安)。自動損切り・利確は建玉の平均単価から設定し、0 で無効。</div>
+        <div class="note">資産 = 初期資金 + これまでの累計損益。建玉の上限は、その日の始めの資産の 3.3 倍 (信用取引の目安)。自動損切り・利確は建玉の平均単価から設定し、0 で無効。</div>
+        <div class="row">
+          <button id="b-reset">資産をリセット</button>
+          <span class="note" id="reset-note"></span>
+        </div>
       </details>
     </div>
   </div>
@@ -309,9 +324,10 @@ button, summary, select { touch-action: manipulation; }
 
 <div class="mbar" id="mbar">
   <div class="mstat">
-    <span class="mb-pnl" id="mb-pnl">0</span>
-    <span class="mb-pos" id="mb-pos">建玉なし</span>
+    <span class="mb-lbl">本日</span><span class="mb-pnl" id="mb-pnl">0</span>
+    <span class="mb-acct">資産 <b id="mb-eq">—</b><br>累計 <b id="mb-cum">—</b></span>
     <span class="mb-time"><span id="mb-phase">寄り前</span> <b id="mb-clock">08:59</b></span>
+    <span class="mb-pos" id="mb-pos">建玉なし</span>
   </div>
   <div class="mbtn">
     <button class="buy" data-for="b-buy">買い</button>
@@ -393,13 +409,46 @@ function fillPicker() {
   }
 }
 
+// ---- 口座 (初期資金と累計損益。ブラウザに保存) -----------------------------------
+let ACC = { start: 3000000, realized: 0, days: 0 };
+function loadAccount() {
+  const a = storage("dt-account");
+  if (a && isFinite(a.start) && isFinite(a.realized)) ACC = a;
+  else {
+    // 口座を持つ前の記録があれば累計に入れる
+    const hist = storage("dt-history") || [];
+    ACC = { start: +$("s-cap").value || 3000000, realized: hist.reduce((t, h) => t + (h.pnl || 0), 0), days: hist.length };
+  }
+  $("s-cap").value = ACC.start;
+}
+const saveAccount = () => storage("dt-account", ACC);
+const equityNow = () => ACC.start + ACC.realized + (G ? G.realized + unrealized() : 0);
+
+function recordDay() {
+  const st = stats(), pnl = Math.round(G.realized);
+  ACC.realized += pnl; ACC.days++; saveAccount();
+  const hist = storage("dt-history") || [];
+  hist.push({ code: S.code, name: nameOf(S), date: S.date, pnl, n: st.n, win: st.win });
+  storage("dt-history", hist.slice(-200));
+  renderHistory();
+}
+
+// 大引け前に別の日へ移るときは、建玉を現在値で手仕舞って記録する。
+function settleUnfinished() {
+  if (!G || G.done || !G.fills.length) return;
+  if (G.pos !== 0) fill(-Math.sign(G.pos), Math.abs(G.pos), curPrice(), "途中終了", G.idx - 1);
+  G.done = true;
+  recordDay();
+}
+
 function startSession(i) {
   stop();
+  settleUnfinished();
   if (i == null) { const list = playable(); i = list[Math.floor(Math.random() * list.length)]; }
   S = DATA.sessions[i];
   prevS = DATA.sessions.filter((x) => x.code === S.code && x.date < S.date).pop() || null;
   const tick = inferTick(S);
-  const cap = Math.max(100000, +$("s-cap").value || 3000000);
+  const cap = Math.max(0, ACC.start + ACC.realized);
   const first = S.open ?? S.bars[0][1];
   G = {
     idx: 0, tick, cap, pos: 0, avg: 0, realized: 0, fees: 0, stop: null, tp: null,
@@ -408,7 +457,7 @@ function startSession(i) {
   $("qty").value = Math.max(100, Math.floor(cap / first / 100) * 100);
   CH.offset = 0; hoverIdx = null;
   $("stop").value = ""; $("tp").value = "";
-  $("msg").textContent = "寄り前。成行注文は寄り値で約定します。";
+  $("msg").textContent = cap > 0 ? "寄り前。成行注文は寄り値で約定します。" : "資産がありません。設定の「資産をリセット」で初期資金に戻せます。";
   updateHeader(); render();
 }
 
@@ -536,7 +585,9 @@ function finish() {
   }
   G.done = true;
   G.equity.push(G.realized);
-  updateHeader(); render(); showResult();
+  const before = ACC.start + ACC.realized;
+  recordDay();
+  updateHeader(); render(); showResult(before);
 }
 
 function afterStep() {
@@ -579,14 +630,17 @@ function stats() {
   };
 }
 
-function showResult() {
+function showResult(before) {
   const st = stats(), pnl = G.realized;
   const open = S.open ?? S.bars[0][1], close = S.close ?? S.bars[S.bars.length - 1][4];
   $("r-title").textContent = `大引け ${S.code} ${nameOf(S)}`;
   $("r-sub").textContent = `${S.date}  寄り ${fmtP(open)} → 引け ${fmtP(close)} (${((close / open - 1) * 100).toFixed(2)}%)`;
   const el = $("r-pnl"); el.textContent = signed(pnl) + " 円"; cls(el, pnl);
+  const after = ACC.start + ACC.realized;
   const rows = [
-    ["資金比", ((pnl / G.cap) * 100).toFixed(2) + "%"],
+    ["資産", `${fmt(before)} → ${fmt(after)} 円`],
+    ["資産比", G.cap > 0 ? ((pnl / G.cap) * 100).toFixed(2) + "%" : "—"],
+    ["累計損益", `${signed(ACC.realized)} 円 (${ACC.days} 日)`],
     ["決済回数", st.n],
     ["勝率", st.win == null ? "—" : (st.win * 100).toFixed(0) + "%"],
     ["平均利益", st.avgW == null ? "—" : signed(st.avgW)],
@@ -596,10 +650,6 @@ function showResult() {
     ["手数料", fmt(G.fees)],
   ];
   $("r-kv").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
-  const hist = storage("dt-history") || [];
-  hist.push({ code: S.code, name: nameOf(S), date: S.date, pnl: Math.round(pnl), n: st.n, win: st.win });
-  storage("dt-history", hist.slice(-200));
-  renderHistory();
   try { $("result").showModal(); } catch (e) { $("result").setAttribute("open", ""); }
 }
 
@@ -618,6 +668,10 @@ function css(name) { return getComputedStyle(document.documentElement).getProper
 function render() {
   const u = unrealized(), total = G.realized + u, last = curPrice();
   const pe = $("pnl"); pe.textContent = signed(total); cls(pe, total);
+  const cum = G.done ? ACC.realized : ACC.realized + total;
+  $("equity").textContent = fmt(Math.round(G.done ? ACC.start + ACC.realized : equityNow())) + " 円";
+  const ce = $("cum"); ce.textContent = signed(cum); cls(ce, cum);
+  $("start").textContent = fmt(ACC.start);
   $("pos").textContent = G.pos === 0 ? "なし" : `${G.pos > 0 ? "買" : "売"} ${fmt(Math.abs(G.pos))} 株`;
   $("avg").textContent = G.pos === 0 ? "—" : fmtP(G.avg);
   const ue = $("unreal"); ue.textContent = signed(u); cls(ue, u);
@@ -642,6 +696,9 @@ function syncMbar() {
   if (!G) return;
   const u = unrealized(), total = G.realized + u;
   const pe = $("mb-pnl"); pe.textContent = signed(total); cls(pe, total);
+  const cum = G.done ? ACC.realized : ACC.realized + total;
+  $("mb-eq").textContent = fmt(Math.round(ACC.start + cum));
+  const ce = $("mb-cum"); ce.textContent = signed(cum); cls(ce, cum);
   $("mb-pos").textContent = G.pos === 0
     ? `建玉なし ・ ${fmtP(curPrice())}`
     : `${G.pos > 0 ? "買" : "売"}${fmt(Math.abs(G.pos))} @${fmtP(G.avg)} 評価${signed(u)}`;
@@ -1127,6 +1184,23 @@ function bind() {
   $("r-close").onclick = () => $("result").close();
   $("r-next").onclick = () => { $("result").close(); startSession(null); };
   $("s-blind").onchange = updateHeader;
+  $("s-cap").onchange = () => {
+    ACC.start = Math.max(100000, Math.round(+$("s-cap").value || 3000000)); $("s-cap").value = ACC.start;
+    saveAccount(); if (G) render();
+  };
+  let resetArmed = null;
+  $("b-reset").onclick = () => {
+    if (!resetArmed) {
+      $("b-reset").textContent = "もう一度押すとリセット"; $("reset-note").textContent = "累計損益と成績の記録が消えます。";
+      resetArmed = setTimeout(() => { resetArmed = null; $("b-reset").textContent = "資産をリセット"; $("reset-note").textContent = ""; }, 4000);
+      return;
+    }
+    clearTimeout(resetArmed); resetArmed = null;
+    ACC = { start: Math.max(100000, +$("s-cap").value || 3000000), realized: 0, days: 0 }; saveAccount();
+    storage("dt-history", []); renderHistory();
+    $("b-reset").textContent = "資産をリセット"; $("reset-note").textContent = "リセットしました。次の日から新しい資産で始まります。";
+    if (G) { G.done = true; startSession(null); }
+  };
   for (const id of ["stop", "tp"]) $(id).addEventListener("change", () => { syncExitsFromInputs(); render(); });
   document.addEventListener("keydown", (e) => {
     if (!G || e.target.matches("input, select, textarea") || $("result").open) return;
@@ -1151,6 +1225,7 @@ function bind() {
 }
 
 function boot() {
+  loadAccount();
   if (window.innerWidth < 600) $("settings").open = false;
   bind(); renderHistory();
   if (!DATA) {
