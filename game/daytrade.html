@@ -174,6 +174,7 @@ button, summary, select { touch-action: manipulation; }
       <span>日付 <b id="m-date">—</b></span>
       <span>前日終値 <b id="m-prev" class="num">—</b></span>
       <span>呼値 <b id="m-tick" class="num">—</b></span>
+      <span>データ <b id="m-iv">—</b></span>
     </div>
     <span class="sp" style="flex:1"></span>
     <span class="phase" id="m-phase">寄り前</span>
@@ -365,12 +366,47 @@ const JP_NAMES = {
   "8035": "東京エレクトロン", "7011": "三菱重工業", "6920": "レーザーテック", "6526": "ソシオネクスト",
   "6857": "アドバンテスト", "7974": "任天堂", "9432": "NTT", "6501": "日立製作所", "8058": "三菱商事",
   "9983": "ファーストリテイリング", "4063": "信越化学工業", "6098": "リクルートHD", "8316": "三井住友FG",
+  "8411": "みずほFG", "7267": "ホンダ", "6861": "キーエンス", "6981": "村田製作所", "6902": "デンソー",
+  "4502": "武田薬品工業", "4568": "第一三共", "9101": "日本郵船", "9104": "商船三井", "9107": "川崎汽船",
+  "5401": "日本製鉄", "7012": "川崎重工業", "7013": "IHI", "6146": "ディスコ", "6723": "ルネサスエレクトロニクス",
+  "285A": "キオクシアHD", "3436": "SUMCO", "6762": "TDK", "6954": "ファナック", "4385": "メルカリ",
+  "3382": "セブン&アイHD", "2914": "JT", "8001": "伊藤忠商事", "8031": "三井物産", "8766": "東京海上HD",
+  "8604": "野村HD", "9434": "ソフトバンク", "4755": "楽天グループ", "5803": "フジクラ", "5801": "古河電気工業",
+  "6532": "ベイカレント", "3659": "ネクソン", "3778": "さくらインターネット", "9348": "ispace", "5253": "カバー",
+  "4478": "フリー", "7751": "キヤノン", "6301": "コマツ", "8053": "住友商事", "6594": "ニデック",
+  "4661": "オリエンタルランド", "2413": "エムスリー", "6367": "ダイキン工業",
 };
 const LEVERAGE = 3.3;
 const $ = (id) => document.getElementById(id);
 
 let DATA = null;
-try { const t = $("data").textContent.trim(); if (t && !t.startsWith("__")) DATA = JSON.parse(t); } catch (e) { DATA = null; }
+let RAW = null;
+try { const t = $("data").textContent.trim(); if (t && !t.startsWith("__")) RAW = JSON.parse(t); } catch (e) { RAW = null; }
+
+// build.py が埋め込む圧縮形式 ({z: gzip の base64}) を元の形に戻す。
+// 足は 1 本 6 個の整数: 前の足からの分数, 始値-前の終値, 高値-max(始,終), min(始,終)-安値, 終値-始値, 出来高/vu (価格は 0.1 円単位)
+async function loadData(raw) {
+  if (!raw || !raw.z) return raw;
+  const bin = Uint8Array.from(atob(raw.z), (ch) => ch.charCodeAt(0));
+  const text = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  const d = JSON.parse(text);
+  d.sessions = d.sessions.map((x) => {
+    const bars = [], f = x.b;
+    let m = 540, pc = x.b0;
+    for (let i = 0; i < f.length; i += 6) {
+      m += f[i];
+      const o = pc + f[i + 1], c = o + f[i + 4], h = Math.max(o, c) + f[i + 2], l = Math.min(o, c) - f[i + 3];
+      bars.push([`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`, o / 10, h / 10, l / 10, c / 10, f[i + 5] * x.vu]);
+      pc = c;
+    }
+    return { code: x.code, name: x.name, date: x.date, interval: x.iv, prev_close: x.pc, open: x.op, close: x.cl, bars };
+  });
+  return d;
+}
+
+const tfNow = () => (S && S.interval === "5m" ? Math.max(CH.tf, 5) : CH.tf);
+const sessionKey = (s) => `${s.code}:${s.date}`;
+const played = () => new Set(storage("dt-played") || []);
 
 // ---- 状態 ---------------------------------------------------------------
 let S = null;        // 現在のセッション
@@ -404,17 +440,37 @@ function storage(key, val) {
 }
 
 // ---- セッション選択 ---------------------------------------------------------
-function playable() { return DATA.sessions.map((s, i) => i).filter((i) => DATA.sessions[i].bars.length >= 100); }
+function playable() {
+  return DATA.sessions.map((s, i) => i).filter((i) => DATA.sessions[i].bars.length >= (DATA.sessions[i].interval === "5m" ? 40 : 200));
+}
 
 function fillPicker() {
   const sel = $("pick");
-  sel.innerHTML = '<option value="">ランダム</option>';
-  for (const i of playable()) {
+  const list = playable(), done = played();
+  const left = list.filter((i) => !done.has(sessionKey(DATA.sessions[i]))).length;
+  sel.innerHTML = `<option value="">ランダム (未プレイ ${left} / ${list.length} 日)</option>`;
+  let group = null, code = null;
+  for (const i of list) {
     const s = DATA.sessions[i];
+    if (s.code !== code) { group = document.createElement("optgroup"); group.label = `${s.code} ${nameOf(s)}`; sel.appendChild(group); code = s.code; }
     const o = document.createElement("option");
-    o.value = i; o.textContent = `${s.code} ${nameOf(s)} ${s.date}`;
-    sel.appendChild(o);
+    o.value = i; o.textContent = `${s.date}${s.interval === "5m" ? " (5分足)" : ""}${done.has(sessionKey(s)) ? " ✓" : ""}`;
+    group.appendChild(o);
   }
+}
+
+// まだ遊んでいない日から選ぶ。全部遊んだら全体から。
+function randomSession() {
+  const list = playable(), done = played();
+  const fresh = list.filter((i) => !done.has(sessionKey(DATA.sessions[i])));
+  const pool = fresh.length ? fresh : list;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+function markPlayed() {
+  const keys = storage("dt-played") || [];
+  const k = sessionKey(S);
+  if (!keys.includes(k)) { keys.push(k); storage("dt-played", keys); }
+  const v = $("pick").value; fillPicker(); $("pick").value = v;
 }
 
 // ---- 口座 (初期資金と累計損益。ブラウザに保存) -----------------------------------
@@ -452,7 +508,8 @@ function settleUnfinished() {
 function startSession(i) {
   stop();
   settleUnfinished();
-  if (i == null) { const list = playable(); i = list[Math.floor(Math.random() * list.length)]; }
+  if (G && S && (G.done || G.idx >= 30)) markPlayed();
+  if (i == null) i = randomSession();
   S = DATA.sessions[i];
   prevS = DATA.sessions.filter((x) => x.code === S.code && x.date < S.date).pop() || null;
   const tick = inferTick(S);
@@ -475,6 +532,9 @@ function updateHeader() {
   $("m-date").textContent = blind ? "？？？？" : S.date;
   $("m-prev").textContent = fmtP(S.prev_close);
   $("m-tick").textContent = G.tick < 1 ? G.tick.toFixed(1) : String(G.tick);
+  $("m-iv").textContent = S.interval === "5m" ? "5分足 (1・3分足なし)" : "1分足";
+  for (const o of $("tf").options) o.disabled = S.interval === "5m" && +o.value < 5;
+  $("tf").value = String(tfNow());
 }
 
 // ---- 約定処理 ---------------------------------------------------------------
@@ -594,7 +654,7 @@ function step(n = 1) {
 // 選んだ足種 (3 分足・5 分足) の 1 本が揃うまで 1 分足を進める。
 // 損切り・利確は 1 分足ごとに判定するので、足の途中で約定しうる。
 function completeBar() {
-  const key = (t) => Math.floor(mins(t) / CH.tf);
+  const key = (t) => Math.floor(mins(t) / tfNow());
   while (G.idx > 0 && G.idx < S.bars.length && key(S.bars[G.idx - 1][0]) === key(S.bars[G.idx][0])) revealBar(null);
 }
 
@@ -847,8 +907,8 @@ function stoch(bars, n, ks, ds) {
 
 // 公開済みの足 (前日 + 当日) を足種で集約し、選ばれた指標を計算する。
 function series() {
-  const prevAgg = prevS ? aggregate(prevS.bars, CH.tf, true) : [];
-  const today = aggregate(S.bars.slice(0, G.idx), CH.tf, false);
+  const prevAgg = prevS ? aggregate(prevS.bars, tfNow(), true) : [];
+  const today = aggregate(S.bars.slice(0, G.idx), tfNow(), false);
   const bars = prevAgg.concat(today), cl = bars.map((b) => b.c), on = (id) => CH.on.has(id);
   const ind = {};
   if (on("sma5")) ind.sma5 = sma(cl, 5);
@@ -927,7 +987,7 @@ function drawChart() {
   }
 
   // 時刻ラベル (間隔は拡大率で変える) と、前日・後場の区切り
-  const ppm = bw / CH.tf, every = [5, 10, 15, 30, 60, 120, 240].find((m) => m * ppm >= 56) || 240;
+  const ppm = bw / tfNow(), every = [5, 10, 15, 30, 60, 120, 240].find((m) => m * ppm >= 56) || 240;
   c.textBaseline = "alphabetic";
   let lastLabelX = -Infinity;
   vis.forEach((b, j) => {
@@ -1106,7 +1166,7 @@ function drawChart() {
 function renderLegend() {
   $("legend").innerHTML = IND.filter((d) => d.group === "line" && CH.on.has(d.id))
     .map((d) => `<span><i style="background:var(${d.color})"></i>${d.label}</span>`).join("");
-  $("z-info").textContent = `${CH.tf} 分足 ・ ${Math.round(CH.view)} 本表示${CH.offset >= 1 ? " ・ 過去を表示中" : ""}`;
+  $("z-info").textContent = `${tfNow()} 分足 ・ ${Math.round(CH.view)} 本表示${CH.offset >= 1 ? " ・ 過去を表示中" : ""}`;
   $("z-live").disabled = CH.offset < 1;
 }
 
@@ -1130,7 +1190,7 @@ function buildChartTools() {
     saveChart(); drawChart();
   });
   $("tf").value = String(CH.tf);
-  $("tf").onchange = (e) => { CH.tf = +e.target.value; CH.offset = 0; saveChart(); drawChart(); };
+  $("tf").onchange = (e) => { CH.tf = +e.target.value; CH.offset = 0; saveChart(); if (G) render(); };
   $("z-in").onclick = () => zoom(1 / 1.4);
   $("z-out").onclick = () => zoom(1.4);
   $("z-fit").onclick = zoomFit;
@@ -1260,15 +1320,16 @@ function bind() {
   new MutationObserver(() => G && drawChart()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 }
 
-function boot() {
+async function boot() {
   loadAccount();
   if (window.innerWidth < 600) $("settings").open = false;
   bind(); renderHistory();
+  try { DATA = await loadData(RAW); } catch (e) { DATA = null; }
   if (!DATA) {
     $("loader").hidden = false; $("game").hidden = true;
     $("file").onchange = async (e) => {
       const f = e.target.files[0]; if (!f) return;
-      try { DATA = JSON.parse(await f.text()); $("loader").hidden = true; $("game").hidden = false; fillPicker(); startSession(null); }
+      try { DATA = await loadData(JSON.parse(await f.text())); $("loader").hidden = true; $("game").hidden = false; fillPicker(); startSession(null); }
       catch (err) { $("msg").textContent = "JSON を読めませんでした。export で作ったファイルを選んでください。"; }
     };
     return;

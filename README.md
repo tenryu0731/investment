@@ -26,12 +26,14 @@ python -m invest status                                 # キャッシュの状�
 ## デイトレ練習ゲーム
 
 ```sh
-python -m invest yf export 7203 6758 9984 --out data/daytrade.json   # 1 分足と日足を取得して書き出す
+python -m invest yf export 7203 6758 9984 --out data/daytrade.json   # 1 分足・5 分足・日足を取得して書き出す
 python game/build.py data/daytrade.json data/daytrade.html          # データ埋め込み版を作る
 ```
 
 `data/daytrade.html` をブラウザで開く。`game/daytrade.html` を直接開いた場合は JSON を選んで読み込む。
 Yahoo の 1 分足は 9:00〜9:04 と大引けの板寄せが欠けるため、寄り値・引け値は日足で補う。
+1 分足は直近 30 日、5 分足は直近 60 日まで取れるので、1 分足のない古い日は 5 分足で入れる (ゲームでは 5 分足以上で遊ぶ)。
+埋め込み版はデータを gzip + base64 で入れる。
 
 ## 再取得しない仕組み
 

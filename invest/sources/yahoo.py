@@ -105,8 +105,10 @@ class Yahoo(Source):
                     [arg("code"), interval, arg("--start", help="YYYY-MM-DD (既定: 取れる最古の日)"),
                      REFRESH]),
             Command("export", "デイトレ練習用 JSON を書き出す (取得もする)",
-                    lambda c, a: self.export(c, a.codes, a.interval, a.out, a.fetch),
-                    [arg("codes", nargs="+"), interval,
+                    lambda c, a: self.export(c, a.codes, a.intervals, a.out, a.fetch),
+                    [arg("codes", nargs="+"),
+                     arg("--intervals", nargs="+", default=["1m", "5m"], choices=["1m", "5m"],
+                         help="使う足。先に書いたものを優先し、ない日だけ後の足で補う (既定: 1m 5m)"),
                      arg("--out", default="data/daytrade.json", help="出力先 (data/ はコミットされない)"),
                      arg("--no-fetch", dest="fetch", action="store_false", help="取得せず DB の分だけ使う")]),
         ]
@@ -173,25 +175,43 @@ class Yahoo(Source):
             prev_bar_close = bars[-1][4]
         return out
 
-    def export(self, conn, codes: list[str], interval: str = "1m", out: str = "data/daytrade.json",
-               fetch: bool = True) -> dict:
-        fetched = []
+    def export(self, conn, codes: list[str], intervals: list[str] = ("1m", "5m"),
+               out: str = "data/daytrade.json", fetch: bool = True) -> dict:
+        """codes の日中足を 1 日ずつ書き出す。1 分足のない古い日は 5 分足で補う。
+
+        取得に失敗した銘柄 (コード違い・上場廃止など) は飛ばして errors に入れる。
+        """
+        fetched, errors = [], {}
         if fetch:
             for c in codes:
-                fetched.append(self.fetch_bars(conn, c, interval))
-                first = conn.execute("SELECT MIN(date) AS d FROM yf_bars WHERE code = ? AND interval = ?",
-                                     (symbol(c), interval)).fetchone()["d"]
-                if first:  # 前日終値のため 1 週間前から
-                    start = (date.fromisoformat(first) - timedelta(days=7)).isoformat()
-                    fetched.append(self.fetch_bars(conn, c, "1d", start))
+                try:
+                    for iv in intervals:
+                        fetched.append(self.fetch_bars(conn, c, iv))
+                    first = conn.execute("SELECT MIN(date) AS d FROM yf_bars WHERE code = ? AND interval != '1d'",
+                                         (symbol(c),)).fetchone()["d"]
+                    if first:  # 前日終値のため 1 週間前から
+                        start = (date.fromisoformat(first) - timedelta(days=7)).isoformat()
+                        fetched.append(self.fetch_bars(conn, c, "1d", start))
+                except Exception as e:  # noqa: BLE001 - 1 銘柄の失敗で全体を止めない
+                    conn.rollback()
+                    errors[c] = str(e)[:200]
         final = _last_final_day()
-        # 場中の当日分は途中で切れているので入れない。
-        sessions = [s for c in codes for s in self.sessions(conn, c, interval) if s["date"] <= final]
+        sessions = []
+        for c in codes:
+            seen: set[str] = set()
+            for iv in intervals:
+                # 場中の当日分は途中で切れているので入れない。
+                for s in self.sessions(conn, c, iv):
+                    if s["date"] <= final and s["date"] not in seen:
+                        seen.add(s["date"])
+                        sessions.append(s)
+        sessions.sort(key=lambda s: (s["code"], s["date"]))
         p = Path(out)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps({"source": "Yahoo Finance", "sessions": sessions},
                                 ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-        return {"out": str(p), "sessions": len(sessions), "fetched": fetched}
+        return {"out": str(p), "sessions": len(sessions), "errors": errors,
+                "stored": sum(f["stored"] for f in fetched)}
 
 
 SOURCE = Yahoo()
