@@ -99,6 +99,9 @@ kbd { font-family: var(--font-num); font-size: 11px; opacity: .75; font-weight: 
 label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
 input[type=number], select { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; width: 100%; box-sizing: border-box; font-family: var(--font-num); }
 .qtybox { display: grid; gap: 6px; }
+.cardhead { display: flex; justify-content: space-between; align-items: center; }
+button.mini { padding: 4px 10px; font-size: 12px; }
+.rs-form { display: grid; gap: 10px; margin-top: 12px; }
 .qtyrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .hint { font-family: var(--font-num); color: var(--muted); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -142,7 +145,8 @@ button, summary, select { touch-action: manipulation; }
   .indgrid { position: fixed; left: 16px; right: 16px; width: auto; top: auto; bottom: calc(158px + env(safe-area-inset-bottom, 0px)); max-height: 55vh; overflow: auto; z-index: 30; }
   .hover { white-space: normal; min-height: 2.8em; font-size: 11px; }
   .legend { font-size: 10px; gap: 4px 8px; }
-  #b-step, #b-step5, #b-play, .trade, .pnlcard { display: none; }
+  #b-step, #b-step5, #b-play, .trade { display: none; }
+  .pnlcard .big { font-size: 22px; }
   .controls { gap: 6px; }
   .controls .sp { display: none; }
   #pick { flex: 1 1 100%; order: 3; }
@@ -234,7 +238,7 @@ button, summary, select { touch-action: manipulation; }
 
     <div class="side">
       <div class="card pnlcard">
-        <h2>資産</h2>
+        <div class="cardhead"><h2>資産</h2><button class="mini" id="b-reset2">リセット</button></div>
         <div class="big" id="equity">0</div>
         <dl class="kv">
           <dt>本日損益</dt><dd id="pnl">0</dd>
@@ -301,7 +305,6 @@ button, summary, select { touch-action: manipulation; }
         <div class="note">資産 = 初期資金 + これまでの累計損益。建玉の上限は、その日の始めの資産の 3.3 倍 (信用取引の目安)。自動損切り・利確は建玉の平均単価から設定し、0 で無効。</div>
         <div class="row">
           <button id="b-reset">資産をリセット</button>
-          <span class="note" id="reset-note"></span>
         </div>
       </details>
     </div>
@@ -346,6 +349,22 @@ button, summary, select { touch-action: manipulation; }
     <button data-for="b-play" id="mb-play" aria-label="再生">▶</button>
   </div>
 </div>
+
+<dialog id="reset-dlg">
+  <h3>資産をリセット</h3>
+  <div class="note" id="rs-sum"></div>
+  <div class="note">累計損益と成績の記録を消して、初期資金からやり直します。遊んでいる途中の日は記録せずに終わります。</div>
+  <div class="rs-form">
+    <label for="rs-cap">初期資金 (円)
+      <input type="number" id="rs-cap" min="100000" step="100000" value="3000000">
+    </label>
+    <label class="chk" for="rs-played"><input type="checkbox" id="rs-played">遊んだ日の ✓ も消す</label>
+  </div>
+  <div class="row" style="margin-top:16px; justify-content:flex-end">
+    <button id="rs-cancel">やめる</button>
+    <button id="rs-ok" class="sell">リセットする</button>
+  </div>
+</dialog>
 
 <dialog id="result">
   <h3 id="r-title">大引け</h3>
@@ -486,7 +505,8 @@ function loadAccount() {
   $("s-cap").value = ACC.start;
 }
 const saveAccount = () => storage("dt-account", ACC);
-const equityNow = () => ACC.start + ACC.realized + (G ? G.realized + unrealized() : 0);
+// 大引け後は本日分が ACC.realized に入っているので足さない
+const equityNow = () => ACC.start + ACC.realized + (G && !G.done ? G.realized + unrealized() : 0);
 
 function recordDay() {
   const st = stats(), pnl = Math.round(G.realized);
@@ -750,7 +770,7 @@ function render() {
   const u = unrealized(), total = G.realized + u, last = curPrice();
   const pe = $("pnl"); pe.textContent = signed(total); cls(pe, total);
   const cum = G.done ? ACC.realized : ACC.realized + total;
-  $("equity").textContent = fmt(Math.round(G.done ? ACC.start + ACC.realized : equityNow())) + " 円";
+  $("equity").textContent = fmt(Math.round(equityNow())) + " 円";
   const ce = $("cum"); ce.textContent = signed(cum); cls(ce, cum);
   $("start").textContent = fmt(ACC.start);
   {
@@ -1286,18 +1306,25 @@ function bind() {
     ACC.start = Math.max(100000, Math.round(+$("s-cap").value || 3000000)); $("s-cap").value = ACC.start;
     saveAccount(); if (G) render();
   };
-  let resetArmed = null;
-  $("b-reset").onclick = () => {
-    if (!resetArmed) {
-      $("b-reset").textContent = "もう一度押すとリセット"; $("reset-note").textContent = "累計損益と成績の記録が消えます。";
-      resetArmed = setTimeout(() => { resetArmed = null; $("b-reset").textContent = "資産をリセット"; $("reset-note").textContent = ""; }, 4000);
-      return;
-    }
-    clearTimeout(resetArmed); resetArmed = null;
-    ACC = { start: Math.max(100000, +$("s-cap").value || 3000000), realized: 0, days: 0 }; saveAccount();
+  const openReset = () => {
+    $("rs-cap").value = ACC.start;
+    $("rs-sum").textContent = `いまの資産 ${fmt(Math.round(equityNow()))} 円 ・ 確定した累計損益 ${signed(ACC.realized)} 円 (${ACC.days} 日)`;
+    stop();
+    try { $("reset-dlg").showModal(); } catch (e) { $("reset-dlg").setAttribute("open", ""); }
+  };
+  $("b-reset").onclick = openReset;
+  $("b-reset2").onclick = openReset;
+  $("rs-cancel").onclick = () => $("reset-dlg").close();
+  $("rs-ok").onclick = () => {
+    const cap = Math.max(100000, Math.round(+$("rs-cap").value || 3000000));
+    ACC = { start: cap, realized: 0, days: 0 }; saveAccount();
+    $("s-cap").value = cap;
     storage("dt-history", []); renderHistory();
-    $("b-reset").textContent = "資産をリセット"; $("reset-note").textContent = "リセットしました。次の日から新しい資産で始まります。";
+    if ($("rs-played").checked) { storage("dt-played", []); }
+    $("reset-dlg").close();
     if (G) { G.done = true; startSession(null); }
+    fillPicker();
+    $("msg").textContent = `資産を ${fmt(cap)} 円にリセットしました。`;
   };
   for (const id of ["stop", "tp"]) $(id).addEventListener("change", () => { syncExitsFromInputs(); render(); });
   document.addEventListener("keydown", (e) => {
